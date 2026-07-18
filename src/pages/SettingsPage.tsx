@@ -13,29 +13,33 @@ function readBoolean(key: string, fallback: boolean) {
   return raw === null ? fallback : raw === 'true';
 }
 
-function readNumber(key: string, fallback: number) {
+function readNumberOrNull(key: string) {
   const raw = window.localStorage.getItem(key);
   const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) ? value : fallback;
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export default function SettingsPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [budget, setBudget] = useState(0);
-  const [salaryDays, setSalaryDays] = useState(18);
+  const [budget, setBudget] = useState<number | null>(null);
+  const [salaryDays, setSalaryDays] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem(storageKeys.theme);
     setTheme(savedTheme === 'light' ? 'light' : 'dark');
-    setBudget(readNumber(storageKeys.budget, 118000));
-    setSalaryDays(readNumber(storageKeys.salaryDays, 18));
+    setBudget(readNumberOrNull(storageKeys.budget));
+    setSalaryDays(readNumberOrNull(storageKeys.salaryDays));
     setNotifications(readBoolean(storageKeys.notifications, true));
   }, []);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (budget === null || salaryDays === null) {
+      setMessage('Установите бюджет и дни до зарплаты.');
+      return;
+    }
     window.localStorage.setItem(storageKeys.theme, theme);
     window.localStorage.setItem(storageKeys.budget, String(budget));
     window.localStorage.setItem(storageKeys.salaryDays, String(salaryDays));
@@ -82,12 +86,24 @@ export default function SettingsPage() {
 
           <label>
             Месячный бюджет
-            <input type="number" value={budget} onChange={e => setBudget(Number(e.target.value))} min={0} />
+            <input
+              type="number"
+              value={budget ?? ''}
+              onChange={e => setBudget(e.target.value ? Number(e.target.value) : null)}
+              min={1}
+              placeholder="Укажите сумму"
+            />
           </label>
 
           <label>
             Дней до зарплаты
-            <input type="number" value={salaryDays} onChange={e => setSalaryDays(Number(e.target.value))} min={1} />
+            <input
+              type="number"
+              value={salaryDays ?? ''}
+              onChange={e => setSalaryDays(e.target.value ? Number(e.target.value) : null)}
+              min={1}
+              placeholder="Укажите количество дней"
+            />
           </label>
 
           <label className="switch-label">

@@ -227,6 +227,55 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all 220ms ease
   border-color: rgba(55,199,255,0.35);
 }
 
+.calendar-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px 0 4px;
+}
+.calendar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  color: rgba(255,255,255,0.75);
+}
+.calendar-head input {
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: white;
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.theme-light .calendar-head input {
+  background: rgba(255,255,255,0.95);
+  color: #1d3253;
+}
+.calendar-range {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.calendar-day {
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  padding: 12px 14px;
+  border-radius: 16px;
+  min-width: 80px;
+  text-align: center;
+  color: rgba(255,255,255,0.8);
+}
+.calendar-day.active {
+  background: linear-gradient(135deg, rgba(55,199,255,0.22), rgba(139,109,255,0.18));
+  border-color: rgba(55,199,255,0.35);
+  color: white;
+}
+.calendar-day small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+
 @keyframes fadeSlide {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
