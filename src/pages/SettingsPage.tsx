@@ -6,6 +6,10 @@ const storageKeys = {
   salaryDays: 'moneypilot-daysToSalary',
   notifications: 'moneypilot-notifications',
   purchases: 'moneypilot-purchases',
+  retirementAge: 'moneypilot-retirement-age',
+  retirementIncome: 'moneypilot-retirement-income',
+  retirementSavings: 'moneypilot-retirement-savings',
+  retirementTarget: 'moneypilot-retirement-target',
 };
 
 function readBoolean(key: string, fallback: boolean) {
@@ -23,6 +27,10 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [budget, setBudget] = useState<number | null>(null);
   const [salaryDays, setSalaryDays] = useState<number | null>(null);
+  const [retirementAge, setRetirementAge] = useState<number | null>(null);
+  const [retirementIncome, setRetirementIncome] = useState<number | null>(null);
+  const [retirementSavings, setRetirementSavings] = useState<number | null>(null);
+  const [retirementTarget, setRetirementTarget] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -31,6 +39,10 @@ export default function SettingsPage() {
     setTheme(savedTheme === 'light' ? 'light' : 'dark');
     setBudget(readNumberOrNull(storageKeys.budget));
     setSalaryDays(readNumberOrNull(storageKeys.salaryDays));
+    setRetirementAge(readNumberOrNull(storageKeys.retirementAge));
+    setRetirementIncome(readNumberOrNull(storageKeys.retirementIncome));
+    setRetirementSavings(readNumberOrNull(storageKeys.retirementSavings));
+    setRetirementTarget(readNumberOrNull(storageKeys.retirementTarget));
     setNotifications(readBoolean(storageKeys.notifications, true));
   }, []);
 
@@ -43,6 +55,26 @@ export default function SettingsPage() {
     window.localStorage.setItem(storageKeys.theme, theme);
     window.localStorage.setItem(storageKeys.budget, String(budget));
     window.localStorage.setItem(storageKeys.salaryDays, String(salaryDays));
+    if (retirementAge !== null) {
+      window.localStorage.setItem(storageKeys.retirementAge, String(retirementAge));
+    } else {
+      window.localStorage.removeItem(storageKeys.retirementAge);
+    }
+    if (retirementIncome !== null) {
+      window.localStorage.setItem(storageKeys.retirementIncome, String(retirementIncome));
+    } else {
+      window.localStorage.removeItem(storageKeys.retirementIncome);
+    }
+    if (retirementSavings !== null) {
+      window.localStorage.setItem(storageKeys.retirementSavings, String(retirementSavings));
+    } else {
+      window.localStorage.removeItem(storageKeys.retirementSavings);
+    }
+    if (retirementTarget !== null) {
+      window.localStorage.setItem(storageKeys.retirementTarget, String(retirementTarget));
+    } else {
+      window.localStorage.removeItem(storageKeys.retirementTarget);
+    }
     window.localStorage.setItem(storageKeys.notifications, String(notifications));
     setMessage('Настройки сохранены. Перейдите на главную для обновления данных.');
   };
@@ -103,6 +135,48 @@ export default function SettingsPage() {
               onChange={e => setSalaryDays(e.target.value ? Number(e.target.value) : null)}
               min={1}
               placeholder="Укажите количество дней"
+            />
+          </label>
+
+          <div className="settings-section-heading">Параметры пенсии</div>
+          <label>
+            Возраст
+            <input
+              type="number"
+              value={retirementAge ?? ''}
+              onChange={e => setRetirementAge(e.target.value ? Number(e.target.value) : null)}
+              min={18}
+              placeholder="Укажите ваш возраст"
+            />
+          </label>
+          <label>
+            Доход
+            <input
+              type="number"
+              value={retirementIncome ?? ''}
+              onChange={e => setRetirementIncome(e.target.value ? Number(e.target.value) : null)}
+              min={0}
+              placeholder="Ежемесячный доход"
+            />
+          </label>
+          <label>
+            Накопления
+            <input
+              type="number"
+              value={retirementSavings ?? ''}
+              onChange={e => setRetirementSavings(e.target.value ? Number(e.target.value) : null)}
+              min={0}
+              placeholder="Текущие сбережения"
+            />
+          </label>
+          <label>
+            Планируемая пенсия
+            <input
+              type="number"
+              value={retirementTarget ?? ''}
+              onChange={e => setRetirementTarget(e.target.value ? Number(e.target.value) : null)}
+              min={0}
+              placeholder="Желаемая пенсия"
             />
           </label>
 
