@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import FamilyPage from './pages/FamilyPage';
 import GoalsPage from './pages/GoalsPage';
 import RetirementPage from './pages/RetirementPage';
+import SettingsPage from './pages/SettingsPage';
 import AuthLayout from './pages/AuthLayout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
       { path: 'retirement', element: <RetirementPage /> },
       { path: 'family', element: <FamilyPage /> },
       { path: 'assistant', element: <AssistantPage /> },
+      { path: 'settings', element: <SettingsPage /> },
     ],
   },
   { path: '*', element: <Navigate to="/auth/login" replace /> },

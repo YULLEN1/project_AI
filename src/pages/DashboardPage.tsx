@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -8,28 +8,54 @@ type Purchase = {
   category: string;
 };
 
-const baseBudget = 118000;
-const daysToSalary = 18;
-const initialPurchases: Purchase[] = [
-  { title: 'Кофе', amount: 420, category: 'Кафе' },
-  { title: 'Обед', amount: 640, category: 'Еда' },
-  { title: 'Такси', amount: 510, category: 'Транспорт' },
-];
+const defaultBudget = 118000;
+const defaultDaysToSalary = 18;
+
+function readPurchases() {
+  if (typeof window === 'undefined') return [] as Purchase[];
+  const raw = window.localStorage.getItem('moneypilot-purchases');
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as Purchase[];
+  } catch {
+    return [];
+  }
+}
+
+function getBaseBudget() {
+  if (typeof window === 'undefined') return defaultBudget;
+  const raw = window.localStorage.getItem('moneypilot-budget');
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) ? value : defaultBudget;
+}
+
+function getDaysToSalary() {
+  if (typeof window === 'undefined') return defaultDaysToSalary;
+  const raw = window.localStorage.getItem('moneypilot-daysToSalary');
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : defaultDaysToSalary;
+}
 
 function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
 
 export default function DashboardPage() {
-  const [purchases, setPurchases] = useState<Purchase[]>(initialPurchases);
+  const [purchases, setPurchases] = useState<Purchase[]>(() => readPurchases());
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [range, setRange] = useState<RangeKey>('week');
 
+  useEffect(() => {
+    window.localStorage.setItem('moneypilot-purchases', JSON.stringify(purchases));
+  }, [purchases]);
+
+  const baseBudget = getBaseBudget();
+  const daysToSalary = getDaysToSalary();
   const totalSpent = useMemo(() => purchases.reduce((sum, item) => sum + item.amount, 0), [purchases]);
   const remainingBudget = baseBudget - totalSpent;
-  const dailyBudget = Math.max(0, remainingBudget / daysToSalary);
-  const healthScore = Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800)));
+  const dailyBudget = daysToSalary > 0 ? Math.max(0, remainingBudget / daysToSalary) : 0;
+  const healthScore = purchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
   const lastPurchase = purchases[purchases.length - 1];
   const averagePurchase = purchases.length ? Math.round(totalSpent / purchases.length) : 0;
@@ -48,11 +74,11 @@ export default function DashboardPage() {
     <div className="page-grid">
       <section className="hero-panel">
         <div className="hero-copy">
-          <p className="eyebrow">Сегодня</p>
-          <h3>Можно ли позволить себе это купить?</h3>
-          <p>Мы пересчитываем ваш бюджет после каждой покупки и подсказываем, насколько безопасен следующий шаг.</p>
+          <p className="eyebrow">Здравствуйте</p>
+          <h3>Начните с чистого счёта</h3>
+          <p>Добавьте свои первые расходы и получите актуальный прогноз по бюджету.</p>
         </div>
-        <div className="hero-badge">⚡ Реальное решение за секунду</div>
+        <div className="hero-badge">✨ Данные обнулены</div>
       </section>
 
       <section className="widget-tabs" aria-label="Временные показатели">
@@ -106,7 +132,7 @@ export default function DashboardPage() {
               <circle cx="180" cy="72" r="5" />
               <circle cx="320" cy="22" r="5" />
             </svg>
-            <div className="chart-tooltip">+12 400 ₽ за {range === 'today' ? 'сегодня' : range === 'week' ? 'неделю' : 'месяц'}</div>
+            <div className="chart-tooltip">{purchases.length ? `+12 400 ₽ за ${range === 'today' ? 'сегодня' : range === 'week' ? 'неделю' : 'месяц'}` : 'Добавьте первую покупку для прогноза'}</div>
           </div>
         </div>
 

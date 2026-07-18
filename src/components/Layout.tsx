@@ -9,6 +9,7 @@ const navItems = [
   { to: '/retirement', label: 'Пенсия', icon: '◎' },
   { to: '/family', label: 'Семья', icon: '⬢' },
   { to: '/assistant', label: 'ИИ-ассистент', icon: '✦' },
+  { to: '/settings', label: 'Настройки', icon: '⚙' },
 ];
 
 export default function Layout() {

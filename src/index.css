@@ -358,6 +358,105 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all 220ms ease
 }
 .theme-light .auth-footer { color: #5b6d8a; }
 .auth-card a { color: #8dceff; }
+
+.settings-form label,
+.settings-form .switch-label {
+  display: block;
+  margin-bottom: 18px;
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.78);
+}
+.theme-light .settings-form label,
+.theme-light .settings-form .switch-label { color: #3b4b6d; }
+.settings-form input,
+.settings-form select,
+.assistant-form textarea {
+  width: 100%;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: white;
+}
+.theme-light .settings-form input,
+.theme-light .settings-form select,
+.theme-light .assistant-form textarea {
+  border-color: rgba(46, 70, 104, 0.16);
+  background: rgba(255,255,255,0.98);
+  color: #1f3253;
+}
+.switch-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.switch-label input {
+  width: auto;
+  transform: scale(1.2);
+}
+.settings-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.assistant-panel {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+}
+.assistant-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+.assistant-header span {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.08);
+  color: #d9ecff;
+  font-weight: 700;
+}
+.theme-light .assistant-header span {
+  background: rgba(21, 52, 91, 0.1);
+  color: #1d3251;
+}
+.assistant-intro {
+  color: rgba(255,255,255,0.75);
+  margin: 0;
+}
+.theme-light .assistant-intro { color: #4f617d; }
+.assistant-form {
+  display: grid;
+  gap: 14px;
+}
+.assistant-form textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+.assistant-answer-box {
+  padding: 22px;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.04);
+  min-height: 120px;
+  display: grid;
+  place-content: center;
+  color: rgba(255,255,255,0.82);
+}
+.theme-light .assistant-answer-box {
+  background: rgba(231, 240, 255, 0.85);
+  color: #1f3253;
+}
+.assistant-answer-box.empty {
+  opacity: 0.85;
+}
+.settings-form button.ghost-button {
+  width: auto;
+}
+
 .hero-panel {
   padding: 24px;
   display: flex;
