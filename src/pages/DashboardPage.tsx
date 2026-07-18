@@ -38,6 +38,18 @@ function getDaysToSalary() {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function getSavedRange() {
+  if (typeof window === 'undefined') return 'week' as RangeKey;
+  const raw = window.localStorage.getItem('moneypilot-range');
+  return raw === 'today' || raw === 'week' || raw === 'month' ? raw : 'week';
+}
+
+function getSavedSelectedDate() {
+  if (typeof window === 'undefined') return getToday();
+  const raw = window.localStorage.getItem('moneypilot-selectedDate');
+  return raw || getToday();
+}
+
 function normalizeDate(value: string) {
   return new Date(value).toISOString().slice(0, 10);
 }
@@ -98,12 +110,17 @@ export default function DashboardPage() {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(getToday());
-  const [range, setRange] = useState<RangeKey>('week');
-  const [selectedDate, setSelectedDate] = useState(getToday());
+  const [range, setRange] = useState<RangeKey>(() => getSavedRange());
+  const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
 
   useEffect(() => {
     window.localStorage.setItem('moneypilot-purchases', JSON.stringify(purchases));
   }, [purchases]);
+
+  useEffect(() => {
+    window.localStorage.setItem('moneypilot-range', range);
+    window.localStorage.setItem('moneypilot-selectedDate', selectedDate);
+  }, [range, selectedDate]);
 
   const baseBudget = getBaseBudget();
   const daysToSalary = getDaysToSalary();
