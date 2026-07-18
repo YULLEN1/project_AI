@@ -50,6 +50,13 @@ function getSavedSelectedDate() {
   return raw || getToday();
 }
 
+function getSavedSavings() {
+  if (typeof window === 'undefined') return 0;
+  const raw = window.localStorage.getItem('moneypilot-savings');
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
 function normalizeDate(value: string) {
   return new Date(value).toISOString().slice(0, 10);
 }
@@ -101,6 +108,21 @@ function getToday() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getSavedSuggestion() {
+  if (typeof window === 'undefined') return { name: 'iPhone', price: 120000 };
+  const raw = window.localStorage.getItem('moneypilot-suggestedItem');
+  if (!raw) return { name: 'iPhone', price: 120000 };
+  try {
+    const parsed = JSON.parse(raw) as { name: string; price: number };
+    return {
+      name: parsed.name || 'iPhone',
+      price: Number.isFinite(parsed.price) && parsed.price > 0 ? parsed.price : 120000,
+    };
+  } catch {
+    return { name: 'iPhone', price: 120000 };
+  }
+}
+
 function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
@@ -112,6 +134,12 @@ export default function DashboardPage() {
   const [date, setDate] = useState(getToday());
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
   const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
+  const [suggestion, setSuggestion] = useState(() => getSavedSuggestion());
+  const [suggestionName, setSuggestionName] = useState(() => getSavedSuggestion().name);
+  const [suggestionPrice, setSuggestionPrice] = useState(() => String(getSavedSuggestion().price));
+  const [isEditingSuggestion, setIsEditingSuggestion] = useState(false);
+  const [savings, setSavings] = useState(() => getSavedSavings());
+  const [savingsInput, setSavingsInput] = useState(() => String(getSavedSavings()));
 
   useEffect(() => {
     window.localStorage.setItem('moneypilot-purchases', JSON.stringify(purchases));
@@ -121,6 +149,10 @@ export default function DashboardPage() {
     window.localStorage.setItem('moneypilot-range', range);
     window.localStorage.setItem('moneypilot-selectedDate', selectedDate);
   }, [range, selectedDate]);
+
+  useEffect(() => {
+    window.localStorage.setItem('moneypilot-savings', String(savings));
+  }, [savings]);
 
   const baseBudget = getBaseBudget();
   const daysToSalary = getDaysToSalary();
@@ -160,6 +192,25 @@ export default function DashboardPage() {
     }] );
     setTitle('');
     setAmount('');
+  };
+
+  const handleSaveSuggestion = (event: FormEvent) => {
+    event.preventDefault();
+    const parsedPrice = Number(suggestionPrice);
+    if (!suggestionName.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) return;
+
+    const next = { name: suggestionName.trim(), price: parsedPrice };
+    setSuggestion(next);
+    window.localStorage.setItem('moneypilot-suggestedItem', JSON.stringify(next));
+    setIsEditingSuggestion(false);
+  };
+
+  const handleSaveSavings = (event: FormEvent) => {
+    event.preventDefault();
+    const parsedSavings = Number(savingsInput);
+    if (!Number.isFinite(parsedSavings) || parsedSavings < 0) return;
+
+    setSavings(parsedSavings);
   };
 
   return (
@@ -230,6 +281,11 @@ export default function DashboardPage() {
           <strong>{baseBudget !== null ? formatCurrency(remainingBudget) : 'Настройте данные'}</strong>
           <div className="mini-pill good">{baseBudget !== null ? '+12 400 ₽ к цели' : 'Через настройки'}</div>
         </article>
+        <article className="metric-card">
+          <span>Накопления</span>
+          <strong>{formatCurrency(savings)}</strong>
+          <div className="mini-pill">{savings > 0 ? 'Ваш запас' : 'Добавьте сумму'}</div>
+        </article>
       </section>
 
       <section className="content-grid">
@@ -289,9 +345,56 @@ export default function DashboardPage() {
           </div>
 
           <div className="card">
-            <p className="eyebrow">Что можно купить?</p>
-            <h4>iPhone · 120 000 ₽</h4>
-            <p>Не сейчас. После такой покупки свободных денег останется только {formatCurrency(Math.max(0, remainingBudget - 120000))}.</p>
+            <p className="eyebrow">Накопления</p>
+            <h4>{formatCurrency(savings)}</h4>
+            <p>Это ваш текущий запас на случай непредвиденных расходов.</p>
+            <form className="inline-form" onSubmit={handleSaveSavings}>
+              <input
+                value={savingsInput}
+                onChange={e => setSavingsInput(e.target.value)}
+                placeholder="Сумма накоплений"
+                type="number"
+              />
+              <button type="submit">Сохранить</button>
+            </form>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <p className="eyebrow">Что можно купить?</p>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => {
+                  setIsEditingSuggestion(prev => !prev);
+                  setSuggestionName(suggestion.name);
+                  setSuggestionPrice(String(suggestion.price));
+                }}
+              >
+                {isEditingSuggestion ? 'Отмена' : 'Изменить'}
+              </button>
+            </div>
+            {isEditingSuggestion ? (
+              <form className="inline-form" onSubmit={handleSaveSuggestion}>
+                <input
+                  value={suggestionName}
+                  onChange={e => setSuggestionName(e.target.value)}
+                  placeholder="Товар"
+                />
+                <input
+                  value={suggestionPrice}
+                  onChange={e => setSuggestionPrice(e.target.value)}
+                  placeholder="Цена"
+                  type="number"
+                />
+                <button type="submit">Сохранить</button>
+              </form>
+            ) : (
+              <>
+                <h4>{suggestion.name} · {formatCurrency(suggestion.price)}</h4>
+                <p>Не сейчас. После такой покупки свободных денег останется только {formatCurrency(Math.max(0, remainingBudget - suggestion.price))}.</p>
+              </>
+            )}
           </div>
         </div>
       </section>
