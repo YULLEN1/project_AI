@@ -67,10 +67,23 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [message, setMessage] = useState('');
 
-  const [members, setMembers] = useState<FamilyMember[]>(() => readJson(storageKeys.familyMembers, [] as FamilyMember[]));
-  const [goals, setGoals] = useState<FamilyGoal[]>(() => readJson(storageKeys.familyGoals, [] as FamilyGoal[]));
-  const [suggestion, setSuggestion] = useState<SuggestedItem>(() => readJson(storageKeys.suggestedItem, { name: 'iPhone', price: 120000 }));
+  const [members, setMembers] = useState<FamilyMember[]>(() => {
+    if (typeof window === 'undefined') return [] as FamilyMember[];
+    return readJson(storageKeys.familyMembers, [] as FamilyMember[]);
+  });
+
+  const [goals, setGoals] = useState<FamilyGoal[]>(() => {
+    if (typeof window === 'undefined') return [] as FamilyGoal[];
+    return readJson(storageKeys.familyGoals, [] as FamilyGoal[]);
+  });
+
+  const [suggestion, setSuggestion] = useState<SuggestedItem>(() => {
+    if (typeof window === 'undefined') return { name: 'iPhone', price: 120000 };
+    return readJson(storageKeys.suggestedItem, { name: 'iPhone', price: 120000 });
+  });
+
   const [savings, setSavings] = useState(() => {
+    if (typeof window === 'undefined') return 0;
     const raw = window.localStorage.getItem(storageKeys.savings);
     const value = raw ? Number(raw) : NaN;
     return Number.isFinite(value) && value >= 0 ? value : 0;
