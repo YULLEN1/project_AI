@@ -16,6 +16,25 @@ const storageKeys = {
   savings: 'moneypilot-savings',
 };
 
+type FamilyMember = {
+  id: string;
+  name: string;
+  role: string;
+  contribute: number;
+  color: string;
+};
+
+type FamilyGoal = {
+  id: string;
+  title: string;
+  target: number;
+};
+
+type SuggestedItem = {
+  name: string;
+  price: number;
+};
+
 function readBoolean(key: string, fallback: boolean) {
   const raw = window.localStorage.getItem(key);
   return raw === null ? fallback : raw === 'true';
@@ -48,13 +67,13 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [message, setMessage] = useState('');
 
-  const [members, setMembers] = useState(() => readJson(storageKeys.familyMembers, [] as any[]));
-  const [goals, setGoals] = useState(() => readJson(storageKeys.familyGoals, [] as any[]));
-  const [suggestion, setSuggestion] = useState(() => readJson(storageKeys.suggestedItem, { name: 'iPhone', price: 120000 }));
+  const [members, setMembers] = useState<FamilyMember[]>(() => readJson(storageKeys.familyMembers, [] as FamilyMember[]));
+  const [goals, setGoals] = useState<FamilyGoal[]>(() => readJson(storageKeys.familyGoals, [] as FamilyGoal[]));
+  const [suggestion, setSuggestion] = useState<SuggestedItem>(() => readJson(storageKeys.suggestedItem, { name: 'iPhone', price: 120000 }));
   const [savings, setSavings] = useState(() => {
     const raw = window.localStorage.getItem(storageKeys.savings);
-    const v = raw ? Number(raw) : NaN;
-    return Number.isFinite(v) && v >= 0 ? v : 0;
+    const value = raw ? Number(raw) : NaN;
+    return Number.isFinite(value) && value >= 0 ? value : 0;
   });
 
   const [memberName, setMemberName] = useState('');
@@ -148,27 +167,44 @@ export default function SettingsPage() {
     e.preventDefault();
     const parsed = Number(memberAmount);
     if (!memberName.trim() || !memberRole.trim() || !Number.isFinite(parsed) || parsed < 0) return;
-    const next = { id: `${Date.now()}-${memberName.trim()}`, name: memberName.trim(), role: memberRole.trim(), contribute: parsed, color: '#37c7ff' };
+    const next: FamilyMember = {
+      id: `${Date.now()}-${memberName.trim()}`,
+      name: memberName.trim(),
+      role: memberRole.trim(),
+      contribute: parsed,
+      color: '#37c7ff',
+    };
     setMembers(prev => [...prev, next]);
-    setMemberName(''); setMemberRole('Доход'); setMemberAmount('');
+    setMemberName('');
+    setMemberRole('Доход');
+    setMemberAmount('');
   };
 
   const handleRemoveMember = (id: string) => setMembers(prev => prev.filter(m => m.id !== id));
+
   const handleAddGoal = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(goalTarget);
     if (!goalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
-    const next = { id: `${Date.now()}-${goalTitle.trim()}`, title: goalTitle.trim(), target: parsed };
+    const next: FamilyGoal = {
+      id: `${Date.now()}-${goalTitle.trim()}`,
+      title: goalTitle.trim(),
+      target: parsed,
+    };
     setGoals(prev => [...prev, next]);
-    setGoalTitle(''); setGoalTarget('');
+    setGoalTitle('');
+    setGoalTarget('');
   };
+
   const handleRemoveGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
+
   const handleSaveSuggestion = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(suggestionPrice);
     if (!suggestionName.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
     setSuggestion({ name: suggestionName.trim(), price: parsed });
   };
+
   const handleSaveSavings = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(savingsInput);
@@ -176,102 +212,202 @@ export default function SettingsPage() {
     setSavings(parsed);
   };
 
+  const totalFamily = useMemo(() => members.reduce((sum, member) => sum + member.contribute, 0), [members]);
+  const totalGoals = useMemo(() => goals.reduce((sum, goal) => sum + goal.target, 0), [goals]);
+  const familyProgress = totalGoals > 0 ? Math.min(100, Math.round((totalFamily / totalGoals) * 100)) : 0;
+
   return (
     <div className="page-grid">
       <section className="hero-panel compact">
         <div>
           <p className="eyebrow">Настройки</p>
           <h3>Персонализируйте приложение под себя</h3>
-          <p>Управляйте бюджетом, уведомлениями и сохраняйте чистоту данных.</p>
+          <p>Все пользовательские показатели теперь задаются здесь.</p>
         </div>
       </section>
 
-      <section className="card large">
-        <form className="settings-form" onSubmit={handleSubmit}>
-          <label>
-            Тема интерфейса
-            <select value={theme} onChange={e => setTheme(e.target.value as 'dark' | 'light')}>
-              <option value="dark">Тёмная</option>
-              <option value="light">Светлая</option>
-            </select>
-          </label>
+      <section className="content-grid">
+        <div className="card large">
+          <h4>Основные настройки</h4>
+          <form className="settings-form" onSubmit={handleSubmit}>
+            <label>
+              Тема интерфейса
+              <select value={theme} onChange={e => setTheme(e.target.value as 'dark' | 'light')}>
+                <option value="dark">Тёмная</option>
+                <option value="light">Светлая</option>
+              </select>
+            </label>
 
-          <label>
-            Месячный бюджет
-            <input
-              type="number"
-              value={budget ?? ''}
-              onChange={e => setBudget(e.target.value ? Number(e.target.value) : null)}
-              min={1}
-              placeholder="Укажите сумму"
-            />
-          </label>
+            <label>
+              Месячный бюджет
+              <input
+                type="number"
+                value={budget ?? ''}
+                onChange={e => setBudget(e.target.value ? Number(e.target.value) : null)}
+                min={1}
+                placeholder="Укажите сумму"
+              />
+            </label>
 
-          <label>
-            Дней до зарплаты
-            <input
-              type="number"
-              value={salaryDays ?? ''}
-              onChange={e => setSalaryDays(e.target.value ? Number(e.target.value) : null)}
-              min={1}
-              placeholder="Укажите количество дней"
-            />
-          </label>
+            <label>
+              Дней до зарплаты
+              <input
+                type="number"
+                value={salaryDays ?? ''}
+                onChange={e => setSalaryDays(e.target.value ? Number(e.target.value) : null)}
+                min={1}
+                placeholder="Укажите количество дней"
+              />
+            </label>
 
-          <div className="settings-section-heading">Параметры пенсии</div>
-          <label>
-            Возраст
-            <input
-              type="number"
-              value={retirementAge ?? ''}
-              onChange={e => setRetirementAge(e.target.value ? Number(e.target.value) : null)}
-              min={18}
-              placeholder="Укажите ваш возраст"
-            />
-          </label>
-          <label>
-            Доход
-            <input
-              type="number"
-              value={retirementIncome ?? ''}
-              onChange={e => setRetirementIncome(e.target.value ? Number(e.target.value) : null)}
-              min={0}
-              placeholder="Ежемесячный доход"
-            />
-          </label>
-          <label>
-            Накопления
-            <input
-              type="number"
-              value={retirementSavings ?? ''}
-              onChange={e => setRetirementSavings(e.target.value ? Number(e.target.value) : null)}
-              min={0}
-              placeholder="Текущие сбережения"
-            />
-          </label>
-          <label>
-            Планируемая пенсия
-            <input
-              type="number"
-              value={retirementTarget ?? ''}
-              onChange={e => setRetirementTarget(e.target.value ? Number(e.target.value) : null)}
-              min={0}
-              placeholder="Желаемая пенсия"
-            />
-          </label>
+            <div className="settings-section-heading">Параметры пенсии</div>
+            <label>
+              Возраст
+              <input
+                type="number"
+                value={retirementAge ?? ''}
+                onChange={e => setRetirementAge(e.target.value ? Number(e.target.value) : null)}
+                min={18}
+                placeholder="Укажите возраст"
+              />
+            </label>
+            <label>
+              Доход
+              <input
+                type="number"
+                value={retirementIncome ?? ''}
+                onChange={e => setRetirementIncome(e.target.value ? Number(e.target.value) : null)}
+                min={0}
+                placeholder="Ежемесячный доход"
+              />
+            </label>
+            <label>
+              Накопления для пенсии
+              <input
+                type="number"
+                value={retirementSavings ?? ''}
+                onChange={e => setRetirementSavings(e.target.value ? Number(e.target.value) : null)}
+                min={0}
+                placeholder="Текущие сбережения"
+              />
+            </label>
+            <label>
+              Планируемая пенсия
+              <input
+                type="number"
+                value={retirementTarget ?? ''}
+                onChange={e => setRetirementTarget(e.target.value ? Number(e.target.value) : null)}
+                min={0}
+                placeholder="Желаемая сумма"
+              />
+            </label>
 
-          <label className="switch-label">
-            <span>Уведомления</span>
-            <input type="checkbox" checked={notifications} onChange={e => setNotifications(e.target.checked)} />
-          </label>
+            <label className="switch-label">
+              <span>Уведомления</span>
+              <input type="checkbox" checked={notifications} onChange={e => setNotifications(e.target.checked)} />
+            </label>
 
-          {message && <div className="auth-success">{message}</div>}
-          <div className="settings-actions">
-            <button type="submit" className="primary-button">Сохранить настройки</button>
-            <button type="button" className="ghost-button" onClick={clearPurchases}>Очистить расходы</button>
+            {message && <div className="auth-success">{message}</div>}
+            <div className="settings-actions">
+              <button type="submit" className="primary-button">Сохранить настройки</button>
+              <button type="button" className="ghost-button" onClick={clearPurchases}>Очистить расходы</button>
+            </div>
+            <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить настройки</button>
+          </form>
+        </div>
+
+        <div className="card large">
+          <div className="settings-block">
+            <div className="settings-block-head">
+              <div>
+                <h4>Члены семьи</h4>
+                <p>Добавьте участников и их вклад в семейный бюджет.</p>
+              </div>
+              <span className="mini-pill">{members.length} участников</span>
+            </div>
+            <div className="settings-list">
+              {members.length ? members.map(member => (
+                <div key={member.id} className="settings-row">
+                  <div>
+                    <strong>{member.name}</strong>
+                    <p>{member.role}</p>
+                  </div>
+                  <div>
+                    <span>{member.contribute.toLocaleString('ru-RU')} ₽</span>
+                    <button type="button" className="text-button" onClick={() => handleRemoveMember(member.id)}>Удалить</button>
+                  </div>
+                </div>
+              )) : (
+                <div className="empty-cell">Пока нет членов семьи. Добавьте первого участника ниже.</div>
+              )}
+            </div>
+            <form className="inline-form" onSubmit={handleAddMember}>
+              <input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" />
+              <input value={memberRole} onChange={e => setMemberRole(e.target.value)} placeholder="Роль (Доход/Расход)" />
+              <input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Сумма" type="number" />
+              <button type="submit">Добавить</button>
+            </form>
           </div>
-          <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить настройки</button>
-        </form>
+
+          <div className="settings-block">
+            <div className="settings-block-head">
+              <div>
+                <h4>Семейные цели</h4>
+                <p>Создайте задачи и храните запланированные суммы.</p>
+              </div>
+              <span className="mini-pill">{goals.length} целей</span>
+            </div>
+            <div className="settings-list">
+              {goals.length ? goals.map(goal => (
+                <div key={goal.id} className="settings-row">
+                  <div>
+                    <strong>{goal.title}</strong>
+                    <p>Цель {goal.target.toLocaleString('ru-RU')} ₽</p>
+                  </div>
+                  <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)}>Удалить</button>
+                </div>
+              )) : (
+                <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
+              )}
+            </div>
+            <form className="inline-form" onSubmit={handleAddGoal}>
+              <input value={goalTitle} onChange={e => setGoalTitle(e.target.value)} placeholder="Название цели" />
+              <input value={goalTarget} onChange={e => setGoalTarget(e.target.value)} placeholder="Сумма цели" type="number" />
+              <button type="submit">Добавить цель</button>
+            </form>
+          </div>
+
+          <div className="settings-block">
+            <div className="settings-block-head">
+              <div>
+                <h4>Что можно купить</h4>
+                <p>Предложение отображается на дашборде.</p>
+              </div>
+              <span className="mini-pill">Редактируемо</span>
+            </div>
+            <form className="inline-form" onSubmit={handleSaveSuggestion}>
+              <input value={suggestionName} onChange={e => setSuggestionName(e.target.value)} placeholder="Товар" />
+              <input value={suggestionPrice} onChange={e => setSuggestionPrice(e.target.value)} placeholder="Цена" type="number" />
+              <button type="submit">Сохранить</button>
+            </form>
+            <p className="settings-note">Это предложение будет отображаться на главной странице.</p>
+          </div>
+
+          <div className="settings-block">
+            <div className="settings-block-head">
+              <div>
+                <h4>Накопления</h4>
+                <p>Текущий запас, который учитывается в прогнозах.</p>
+              </div>
+              <span className="mini-pill">Сохранено</span>
+            </div>
+            <form className="inline-form" onSubmit={handleSaveSavings}>
+              <input value={savingsInput} onChange={e => setSavingsInput(e.target.value)} placeholder="Сумма накоплений" type="number" />
+              <button type="submit">Сохранить</button>
+            </form>
+            <p className="settings-note">Это число влияет на дашборд.</p>
+          </div>
+        </div>
       </section>
     </div>
   );

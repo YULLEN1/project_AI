@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -134,12 +135,8 @@ export default function DashboardPage() {
   const [date, setDate] = useState(getToday());
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
   const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
-  const [suggestion, setSuggestion] = useState(() => getSavedSuggestion());
-  const [suggestionName, setSuggestionName] = useState(() => getSavedSuggestion().name);
-  const [suggestionPrice, setSuggestionPrice] = useState(() => String(getSavedSuggestion().price));
-  const [isEditingSuggestion, setIsEditingSuggestion] = useState(false);
-  const [savings, setSavings] = useState(() => getSavedSavings());
-  const [savingsInput, setSavingsInput] = useState(() => String(getSavedSavings()));
+  const suggestion = getSavedSuggestion();
+  const savings = getSavedSavings();
 
   useEffect(() => {
     window.localStorage.setItem('moneypilot-purchases', JSON.stringify(purchases));
@@ -150,9 +147,6 @@ export default function DashboardPage() {
     window.localStorage.setItem('moneypilot-selectedDate', selectedDate);
   }, [range, selectedDate]);
 
-  useEffect(() => {
-    window.localStorage.setItem('moneypilot-savings', String(savings));
-  }, [savings]);
 
   const baseBudget = getBaseBudget();
   const daysToSalary = getDaysToSalary();
@@ -194,24 +188,6 @@ export default function DashboardPage() {
     setAmount('');
   };
 
-  const handleSaveSuggestion = (event: FormEvent) => {
-    event.preventDefault();
-    const parsedPrice = Number(suggestionPrice);
-    if (!suggestionName.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) return;
-
-    const next = { name: suggestionName.trim(), price: parsedPrice };
-    setSuggestion(next);
-    window.localStorage.setItem('moneypilot-suggestedItem', JSON.stringify(next));
-    setIsEditingSuggestion(false);
-  };
-
-  const handleSaveSavings = (event: FormEvent) => {
-    event.preventDefault();
-    const parsedSavings = Number(savingsInput);
-    if (!Number.isFinite(parsedSavings) || parsedSavings < 0) return;
-
-    setSavings(parsedSavings);
-  };
 
   return (
     <div className="page-grid">
@@ -348,53 +324,14 @@ export default function DashboardPage() {
             <p className="eyebrow">Накопления</p>
             <h4>{formatCurrency(savings)}</h4>
             <p>Это ваш текущий запас на случай непредвиденных расходов.</p>
-            <form className="inline-form" onSubmit={handleSaveSavings}>
-              <input
-                value={savingsInput}
-                onChange={e => setSavingsInput(e.target.value)}
-                placeholder="Сумма накоплений"
-                type="number"
-              />
-              <button type="submit">Сохранить</button>
-            </form>
+            <p className="settings-note">Измените сумму накоплений на странице <Link to="/settings">Настройки</Link>.</p>
           </div>
 
           <div className="card">
-            <div className="card-head">
-              <p className="eyebrow">Что можно купить?</p>
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => {
-                  setIsEditingSuggestion(prev => !prev);
-                  setSuggestionName(suggestion.name);
-                  setSuggestionPrice(String(suggestion.price));
-                }}
-              >
-                {isEditingSuggestion ? 'Отмена' : 'Изменить'}
-              </button>
-            </div>
-            {isEditingSuggestion ? (
-              <form className="inline-form" onSubmit={handleSaveSuggestion}>
-                <input
-                  value={suggestionName}
-                  onChange={e => setSuggestionName(e.target.value)}
-                  placeholder="Товар"
-                />
-                <input
-                  value={suggestionPrice}
-                  onChange={e => setSuggestionPrice(e.target.value)}
-                  placeholder="Цена"
-                  type="number"
-                />
-                <button type="submit">Сохранить</button>
-              </form>
-            ) : (
-              <>
-                <h4>{suggestion.name} · {formatCurrency(suggestion.price)}</h4>
-                <p>Не сейчас. После такой покупки свободных денег останется только {formatCurrency(Math.max(0, remainingBudget - suggestion.price))}.</p>
-              </>
-            )}
+            <p className="eyebrow">Что можно купить?</p>
+            <h4>{suggestion.name} · {formatCurrency(suggestion.price)}</h4>
+            <p>После такой покупки свободных денег останется {formatCurrency(Math.max(0, remainingBudget - suggestion.price))}.</p>
+            <p className="settings-note">Измените это предложение в <Link to="/settings">Настройках</Link>.</p>
           </div>
         </div>
       </section>
