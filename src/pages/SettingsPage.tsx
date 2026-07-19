@@ -56,6 +56,10 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function formatCurrency(value: number) {
+  return `${value.toLocaleString('ru-RU')} ₽`;
+}
+
 export default function SettingsPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [budget, setBudget] = useState<number | null>(null);
