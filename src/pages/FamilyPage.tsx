@@ -148,42 +148,21 @@ export default function FamilyPage() {
                     <strong>{member.name}</strong>
                     <p style={{ margin: '4px 0 0', color: '#aaa' }}>{member.role}</p>
                   </div>
-                  <button type="button" className="text-button" onClick={() => handleRemoveMember(member.id)}>
-                    Удалить
-                  </button>
+                  <span style={{ color: '#888' }}>{formatCurrency(member.contribute)}</span>
                 </div>
                 <div style={{ marginTop: 12, height: 8, borderRadius: 999, background: member.color }} />
-                <p style={{ marginTop: 10 }}>{formatCurrency(member.contribute)}</p>
               </div>
             )) : (
               <div className="card empty-card">
-                <p>Пока нет членов семьи. Добавьте первого участника.</p>
+                <p>Пока нет членов семьи. Добавьте первого участника в настройках.</p>
               </div>
             )}
           </div>
 
-          <form className="card" style={{ marginTop: 20 }} onSubmit={handleAddMember}>
-            <h4>Добавить члена семьи</h4>
-            <div className="grid-form">
-              <input
-                value={memberName}
-                onChange={e => setMemberName(e.target.value)}
-                placeholder="Имя"
-              />
-              <input
-                value={memberRole}
-                onChange={e => setMemberRole(e.target.value)}
-                placeholder="Роль (Доход/Расход)"
-              />
-              <input
-                value={memberAmount}
-                onChange={e => setMemberAmount(e.target.value)}
-                placeholder="Сумма"
-                type="number"
-              />
-            </div>
-            <button type="submit">Добавить участника</button>
-          </form>
+          <div className="card" style={{ marginTop: 20 }}>
+            <h4>Добавление участников и настройка целей</h4>
+            <p>Управляйте членами семьи и целями в <a href="/settings">Настройках</a>.</p>
+          </div>
         </div>
 
         <div className="card large">

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 const storageKeys = {
   theme: 'moneypilot-theme',
@@ -10,6 +10,10 @@ const storageKeys = {
   retirementIncome: 'moneypilot-retirement-income',
   retirementSavings: 'moneypilot-retirement-savings',
   retirementTarget: 'moneypilot-retirement-target',
+  familyMembers: 'moneypilot-family-members',
+  familyGoals: 'moneypilot-family-goals',
+  suggestedItem: 'moneypilot-suggestedItem',
+  savings: 'moneypilot-savings',
 };
 
 function readBoolean(key: string, fallback: boolean) {
@@ -23,6 +27,16 @@ function readNumberOrNull(key: string) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function readJson<T>(key: string, fallback: T): T {
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function SettingsPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [budget, setBudget] = useState<number | null>(null);
@@ -33,6 +47,24 @@ export default function SettingsPage() {
   const [retirementTarget, setRetirementTarget] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [message, setMessage] = useState('');
+
+  const [members, setMembers] = useState(() => readJson(storageKeys.familyMembers, [] as any[]));
+  const [goals, setGoals] = useState(() => readJson(storageKeys.familyGoals, [] as any[]));
+  const [suggestion, setSuggestion] = useState(() => readJson(storageKeys.suggestedItem, { name: 'iPhone', price: 120000 }));
+  const [savings, setSavings] = useState(() => {
+    const raw = window.localStorage.getItem(storageKeys.savings);
+    const v = raw ? Number(raw) : NaN;
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  });
+
+  const [memberName, setMemberName] = useState('');
+  const [memberRole, setMemberRole] = useState('Доход');
+  const [memberAmount, setMemberAmount] = useState('');
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalTarget, setGoalTarget] = useState('');
+  const [suggestionName, setSuggestionName] = useState(suggestion.name);
+  const [suggestionPrice, setSuggestionPrice] = useState(String(suggestion.price));
+  const [savingsInput, setSavingsInput] = useState(String(savings));
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem(storageKeys.theme);
@@ -45,6 +77,22 @@ export default function SettingsPage() {
     setRetirementTarget(readNumberOrNull(storageKeys.retirementTarget));
     setNotifications(readBoolean(storageKeys.notifications, true));
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.familyMembers, JSON.stringify(members));
+  }, [members]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.familyGoals, JSON.stringify(goals));
+  }, [goals]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.suggestedItem, JSON.stringify(suggestion));
+  }, [suggestion]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.savings, String(savings));
+  }, [savings]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -94,6 +142,38 @@ export default function SettingsPage() {
     setSalaryDays(18);
     setNotifications(true);
     setMessage('Настройки восстановлены по умолчанию.');
+  };
+
+  const handleAddMember = (e: FormEvent) => {
+    e.preventDefault();
+    const parsed = Number(memberAmount);
+    if (!memberName.trim() || !memberRole.trim() || !Number.isFinite(parsed) || parsed < 0) return;
+    const next = { id: `${Date.now()}-${memberName.trim()}`, name: memberName.trim(), role: memberRole.trim(), contribute: parsed, color: '#37c7ff' };
+    setMembers(prev => [...prev, next]);
+    setMemberName(''); setMemberRole('Доход'); setMemberAmount('');
+  };
+
+  const handleRemoveMember = (id: string) => setMembers(prev => prev.filter(m => m.id !== id));
+  const handleAddGoal = (e: FormEvent) => {
+    e.preventDefault();
+    const parsed = Number(goalTarget);
+    if (!goalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
+    const next = { id: `${Date.now()}-${goalTitle.trim()}`, title: goalTitle.trim(), target: parsed };
+    setGoals(prev => [...prev, next]);
+    setGoalTitle(''); setGoalTarget('');
+  };
+  const handleRemoveGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
+  const handleSaveSuggestion = (e: FormEvent) => {
+    e.preventDefault();
+    const parsed = Number(suggestionPrice);
+    if (!suggestionName.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
+    setSuggestion({ name: suggestionName.trim(), price: parsed });
+  };
+  const handleSaveSavings = (e: FormEvent) => {
+    e.preventDefault();
+    const parsed = Number(savingsInput);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    setSavings(parsed);
   };
 
   return (
