@@ -22,6 +22,7 @@ const storageKeyUser = 'moneypilot-user';
 const storageKeyUsers = 'moneypilot-users';
 
 function readUsers() {
+  if (typeof window === 'undefined') return [] as Array<{ email: string; password: string }>;
   const raw = window.localStorage.getItem(storageKeyUsers);
   if (!raw) return [] as Array<{ email: string; password: string }>;
   try {
@@ -32,10 +33,12 @@ function readUsers() {
 }
 
 function writeUsers(users: Array<{ email: string; password: string }>) {
+  if (typeof window === 'undefined') return;
   window.localStorage.setItem(storageKeyUsers, JSON.stringify(users));
 }
 
 function readCurrentUser(): AuthUser | null {
+  if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem(storageKeyUser);
   if (!raw) return null;
   try {
@@ -46,6 +49,7 @@ function readCurrentUser(): AuthUser | null {
 }
 
 function writeCurrentUser(user: AuthUser | null) {
+  if (typeof window === 'undefined') return;
   if (user) {
     window.localStorage.setItem(storageKeyUser, JSON.stringify(user));
   } else {

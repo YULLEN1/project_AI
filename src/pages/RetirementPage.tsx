@@ -35,6 +35,7 @@ export default function RetirementPage() {
   }, [projection, target]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     window.localStorage.setItem(retirementKeys.age, age);
     window.localStorage.setItem(retirementKeys.income, income);
     window.localStorage.setItem(retirementKeys.savings, savings);

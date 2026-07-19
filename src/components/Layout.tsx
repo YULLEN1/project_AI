@@ -16,6 +16,7 @@ export default function Layout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window === 'undefined') return 'dark';
     const saved = window.localStorage.getItem('moneypilot-theme');
     return saved === 'light' ? 'light' : 'dark';
   });
