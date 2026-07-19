@@ -325,6 +325,16 @@ export default function SettingsPage() {
               <button type="submit" className="primary-button">Сохранить настройки</button>
               <button type="button" className="ghost-button" onClick={clearPurchases}>Очистить расходы</button>
             </div>
+            <div style={{ marginTop: 12 }}>
+              <div className="forecast-box">
+                <p>Прогресс по семейным целям</p>
+                <strong>{familyProgress}%</strong>
+                <div style={{ height: 8, background: '#e6e6e6', borderRadius: 6, overflow: 'hidden', marginTop: 8 }}>
+                  <div style={{ width: `${familyProgress}%`, height: '100%', background: '#37c7ff' }} />
+                </div>
+                <small style={{ display: 'block', marginTop: 8 }}>{formatCurrency(totalFamily)} / {formatCurrency(totalGoals)}</small>
+              </div>
+            </div>
             <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить настройки</button>
           </form>
         </div>
