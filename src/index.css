@@ -1006,3 +1006,48 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   .chip-row { flex-direction: column; }
   .chip { width: 100%; text-align: center; }
 }
+
+/* ── Assistant page (embed widget + share data) ── */
+.assistant-page-layout {
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+.share-section {
+  display: grid;
+  gap: 16px;
+  margin-top: 8px;
+}
+.share-section .primary-button {
+  width: 100%;
+  justify-content: center;
+}
+.data-preview {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.data-preview-label {
+  font-size: var(--font-size-sm);
+  color: #8aa2ca;
+  margin: 0;
+}
+.data-preview pre {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(255,255,255,0.75);
+  max-height: 300px;
+  overflow-y: auto;
+}
+.theme-light .data-preview {
+  background: rgba(231, 240, 255, 0.5);
+  border-color: rgba(21, 52, 91, 0.15);
+}
+.theme-light .data-preview pre { color: #1f3253; }
+.theme-light .data-preview-label { color: #4f617d; }
