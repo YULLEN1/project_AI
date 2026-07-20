@@ -18,7 +18,7 @@ function readPurchases() {
     const saved = JSON.parse(raw) as Purchase[];
     return saved.map(item => ({
       ...item,
-      date: item.date || new Date().toISOString().slice(0, 10),
+      date: item.date || getToday(),
     }));
   } catch {
     return [];
@@ -59,7 +59,8 @@ function getSavedSavings() {
 }
 
 function normalizeDate(value: string) {
-  return new Date(value).toISOString().slice(0, 10);
+  const d = new Date(value);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function getRangeDates(base: string, range: RangeKey) {
@@ -106,7 +107,8 @@ function formatDateLabel(dateString: string) {
 }
 
 function getToday() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 function getSavedSuggestion() {
