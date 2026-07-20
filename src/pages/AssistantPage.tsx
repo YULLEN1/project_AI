@@ -48,18 +48,6 @@ function collectContext() {
   };
 }
 
-const SYSTEM_PROMPT = `Ты — финансовый консультант приложения MoneyPilot. Твоя задача — помогать пользователю управлять личными финансами: отвечать на вопросы, давать рекомендации, анализировать привычки и строить планы.
-
-Правила:
-- Всегда отвечай на русском языке.
-- Говори простым языком, без канцелярита.
-- Будь конкретным: если можно посчитать — считай.
-- Не давай советов по инвестированию в ценные бумаги или криптовалюту.
-- Не рекомендуй конкретные банки или финансовые продукты.
-- Не делай прогнозов о курсах валют или акций.
-
-Если пользователь передал финансовые данные — используй их для анализа. Если данных нет — дай универсальный совет.`;
-
 export default function AssistantPage() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -77,32 +65,26 @@ export default function AssistantPage() {
 
     try {
       const context = collectContext();
-      const contextStr = JSON.stringify(context, null, 2);
+      const body = {
+        message: text,
+        context,
+      };
 
-      const response = await fetch(`${API_URL}/chat/completions`, {
+      const response = await fetch(API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'cloud-ai',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: `Данные пользователя из приложения MoneyPilot:\n${contextStr}\n\nВопрос: ${text}` },
-          ],
-          temperature: 0.7,
-          max_tokens: 1024,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
-        throw new Error(`Ошибка сервера: ${response.status}`);
+        const errText = await response.text().catch(() => '');
+        throw new Error(`Ошибка ${response.status}: ${errText || response.statusText}`);
       }
 
       const data = await response.json();
-      const reply = data.choices?.[0]?.message?.content;
+      const reply = data.reply || data.message || data.content || data.answer || data.response || data.text || data.result?.[0]?.text || JSON.stringify(data);
       if (reply) {
-        setAnswer(reply);
+        setAnswer(typeof reply === 'string' ? reply : JSON.stringify(reply));
       } else {
         setError('Пустой ответ от агента. Попробуйте переформулировать вопрос.');
       }
