@@ -84,7 +84,7 @@ export default function AssistantPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
+          'Authorization': API_KEY,
         },
         body: JSON.stringify({
           model: 'cloud-ai',
