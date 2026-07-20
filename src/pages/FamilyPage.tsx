@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
 
 type FamilyMember = {
   id: string;
@@ -26,6 +27,11 @@ function readMembers() {
   }
 }
 
+function writeMembers(members: FamilyMember[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem('moneypilot-family-members', JSON.stringify(members));
+}
+
 function readGoals() {
   if (typeof window === 'undefined') return [] as FamilyGoal[];
   const raw = window.localStorage.getItem('moneypilot-family-goals');
@@ -37,11 +43,21 @@ function readGoals() {
   }
 }
 
+function getSalary() {
+  if (typeof window === 'undefined') return 0;
+  const raw = window.localStorage.getItem('moneypilot-salary');
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
 
+const SELF_COLOR = '#4c7eff';
+
 export default function FamilyPage() {
+  const { user } = useAuth();
   const [members, setMembers] = useState<FamilyMember[]>(() => readMembers());
   const [goals, setGoals] = useState<FamilyGoal[]>(() => readGoals());
 
@@ -53,6 +69,29 @@ export default function FamilyPage() {
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const selfId = `self:${user.email}`;
+    const salary = getSalary();
+    setMembers(prev => {
+      const selfIndex = prev.findIndex(m => m.id === selfId);
+      if (selfIndex >= 0) {
+        const updated = [...prev];
+        updated[selfIndex] = { ...updated[selfIndex], contribute: salary };
+        writeMembers(updated);
+        return updated;
+      }
+      const updated = [
+        { id: selfId, name: user.email.split('@')[0], role: 'Вы (автор)', contribute: salary, color: SELF_COLOR },
+        ...prev,
+      ];
+      writeMembers(updated);
+      return updated;
+    });
+  }, [user]);
+
+  const selfId = user ? `self:${user.email}` : '';
 
   const totalContributions = useMemo(
     () => members.reduce((sum, member) => sum + member.contribute, 0),
@@ -72,7 +111,7 @@ export default function FamilyPage() {
         <div>
           <p className="eyebrow">Семейный режим</p>
           <h3>Один бюджет для всей семьи</h3>
-          <p>Добавляйте участников и цели только в настройках, а здесь смотрите итоги.</p>
+          <p>Вы автоматически добавлены как участник. Остальных добавляйте в настройках.</p>
         </div>
       </section>
 
@@ -91,13 +130,13 @@ export default function FamilyPage() {
             {members.length ? members.map(member => (
               <div key={member.id} className="settings-row">
                 <div>
-                  <strong>{member.name}</strong>
+                  <strong style={member.id === selfId ? { color: SELF_COLOR } : undefined}>{member.name}</strong>
                   <p>{member.role}</p>
                 </div>
                 <span>{formatCurrency(member.contribute)}</span>
               </div>
             )) : (
-              <div className="empty-cell">Нет участников семьи. Добавьте их в настройках.</div>
+              <div className="empty-cell">Нет участников семьи.</div>
             )}
           </div>
         </div>

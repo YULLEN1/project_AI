@@ -405,7 +405,9 @@ export default function SettingsPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>{member.contribute.toLocaleString('ru-RU')} ₽</span>
-                    <button type="button" className="text-button" onClick={() => handleRemoveMember(member.id)} aria-label={`Удалить ${member.name}`}>Удалить</button>
+                    {!member.id.startsWith('self:') && (
+                      <button type="button" className="text-button" onClick={() => handleRemoveMember(member.id)} aria-label={`Удалить ${member.name}`}>Удалить</button>
+                    )}
                   </div>
                 </div>
               )) : (
