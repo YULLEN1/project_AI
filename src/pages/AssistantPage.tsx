@@ -1,7 +1,6 @@
 import { FormEvent, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_AI_API_URL as string;
-const API_KEY = import.meta.env.VITE_AI_API_KEY as string;
 
 type Purchase = {
   title: string;
@@ -84,7 +83,6 @@ export default function AssistantPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': API_KEY,
         },
         body: JSON.stringify({
           model: 'cloud-ai',
