@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 
 const storageKeys = {
   theme: 'moneypilot-theme',
@@ -35,6 +35,8 @@ type SuggestedItem = {
   price: number;
 };
 
+type SettingsTab = 'general' | 'retirement' | 'family' | 'extras';
+
 function readBoolean(key: string, fallback: boolean) {
   const raw = window.localStorage.getItem(key);
   return raw === null ? fallback : raw === 'true';
@@ -61,6 +63,7 @@ function formatCurrency(value: number) {
 }
 
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [budget, setBudget] = useState<number | null>(null);
   const [salaryDays, setSalaryDays] = useState<number | null>(null);
@@ -82,8 +85,8 @@ export default function SettingsPage() {
   });
 
   const [suggestion, setSuggestion] = useState<SuggestedItem>(() => {
-    if (typeof window === 'undefined') return { name: 'iPhone', price: 120000 };
-    return readJson(storageKeys.suggestedItem, { name: 'iPhone', price: 120000 });
+    if (typeof window === 'undefined') return { name: '', price: 0 };
+    return readJson(storageKeys.suggestedItem, { name: '', price: 0 });
   });
 
   const [savings, setSavings] = useState(() => {
@@ -102,7 +105,10 @@ export default function SettingsPage() {
   const [suggestionPrice, setSuggestionPrice] = useState(String(suggestion.price));
   const [savingsInput, setSavingsInput] = useState(String(savings));
 
-  useEffect(() => {
+  const [budgetError, setBudgetError] = useState(false);
+  const [salaryDaysError, setSalaryDaysError] = useState(false);
+
+  const loadFromStorage = () => {
     const savedTheme = window.localStorage.getItem(storageKeys.theme);
     setTheme(savedTheme === 'light' ? 'light' : 'dark');
     setBudget(readNumberOrNull(storageKeys.budget));
@@ -112,28 +118,34 @@ export default function SettingsPage() {
     setRetirementSavings(readNumberOrNull(storageKeys.retirementSavings));
     setRetirementTarget(readNumberOrNull(storageKeys.retirementTarget));
     setNotifications(readBoolean(storageKeys.notifications, true));
-  }, []);
+  };
 
-  useEffect(() => {
-    window.localStorage.setItem(storageKeys.familyMembers, JSON.stringify(members));
-  }, [members]);
+  // Load from localStorage on mount
+  if (budget === null && salaryDays === null) {
+    loadFromStorage();
+  }
 
-  useEffect(() => {
-    window.localStorage.setItem(storageKeys.familyGoals, JSON.stringify(goals));
-  }, [goals]);
+  const handleSaveMembers = (newMembers: FamilyMember[]) => {
+    setMembers(newMembers);
+    window.localStorage.setItem(storageKeys.familyMembers, JSON.stringify(newMembers));
+  };
 
-  useEffect(() => {
-    window.localStorage.setItem(storageKeys.suggestedItem, JSON.stringify(suggestion));
-  }, [suggestion]);
-
-  useEffect(() => {
-    window.localStorage.setItem(storageKeys.savings, String(savings));
-  }, [savings]);
+  const handleSaveGoals = (newGoals: FamilyGoal[]) => {
+    setGoals(newGoals);
+    window.localStorage.setItem(storageKeys.familyGoals, JSON.stringify(newGoals));
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (budget === null || salaryDays === null) {
-      setMessage('Установите бюджет и дни до зарплаты.');
+    setMessage('');
+
+    const hasBudgetError = budget === null || budget <= 0;
+    const hasSalaryError = salaryDays === null || salaryDays <= 0;
+    setBudgetError(hasBudgetError);
+    setSalaryDaysError(hasSalaryError);
+
+    if (hasBudgetError || hasSalaryError) {
+      setMessage('Заполните обязательные поля: бюджет и дни до зарплаты.');
       return;
     }
     window.localStorage.setItem(storageKeys.theme, theme);
@@ -160,7 +172,7 @@ export default function SettingsPage() {
       window.localStorage.removeItem(storageKeys.retirementTarget);
     }
     window.localStorage.setItem(storageKeys.notifications, String(notifications));
-    setMessage('Настройки сохранены. Перейдите на главную для обновления данных.');
+    setMessage('Настройки сохранены.');
   };
 
   const clearPurchases = () => {
@@ -177,6 +189,8 @@ export default function SettingsPage() {
     setBudget(118000);
     setSalaryDays(18);
     setNotifications(true);
+    setBudgetError(false);
+    setSalaryDaysError(false);
     setMessage('Настройки восстановлены по умолчанию.');
   };
 
@@ -191,13 +205,13 @@ export default function SettingsPage() {
       contribute: parsed,
       color: '#37c7ff',
     };
-    setMembers(prev => [...prev, next]);
+    handleSaveMembers([...members, next]);
     setMemberName('');
     setMemberRole('Доход');
     setMemberAmount('');
   };
 
-  const handleRemoveMember = (id: string) => setMembers(prev => prev.filter(m => m.id !== id));
+  const handleRemoveMember = (id: string) => handleSaveMembers(members.filter(m => m.id !== id));
 
   const handleAddGoal = (e: FormEvent) => {
     e.preventDefault();
@@ -208,18 +222,20 @@ export default function SettingsPage() {
       title: goalTitle.trim(),
       target: parsed,
     };
-    setGoals(prev => [...prev, next]);
+    handleSaveGoals([...goals, next]);
     setGoalTitle('');
     setGoalTarget('');
   };
 
-  const handleRemoveGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
+  const handleRemoveGoal = (id: string) => handleSaveGoals(goals.filter(g => g.id !== id));
 
   const handleSaveSuggestion = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(suggestionPrice);
     if (!suggestionName.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
     setSuggestion({ name: suggestionName.trim(), price: parsed });
+    window.localStorage.setItem(storageKeys.suggestedItem, JSON.stringify({ name: suggestionName.trim(), price: parsed }));
+    setMessage('Предложение сохранено.');
   };
 
   const handleSaveSavings = (e: FormEvent) => {
@@ -227,11 +243,20 @@ export default function SettingsPage() {
     const parsed = Number(savingsInput);
     if (!Number.isFinite(parsed) || parsed < 0) return;
     setSavings(parsed);
+    window.localStorage.setItem(storageKeys.savings, String(parsed));
+    setMessage('Накопления сохранены.');
   };
 
   const totalFamily = useMemo(() => members.reduce((sum, member) => sum + member.contribute, 0), [members]);
   const totalGoals = useMemo(() => goals.reduce((sum, goal) => sum + goal.target, 0), [goals]);
   const familyProgress = totalGoals > 0 ? Math.min(100, Math.round((totalFamily / totalGoals) * 100)) : 0;
+
+  const tabs: Array<{ key: SettingsTab; label: string }> = [
+    { key: 'general', label: 'Основные' },
+    { key: 'retirement', label: 'Пенсия' },
+    { key: 'family', label: 'Семья' },
+    { key: 'extras', label: 'Дополнительно' },
+  ];
 
   return (
     <div className="page-grid">
@@ -239,14 +264,30 @@ export default function SettingsPage() {
         <div>
           <p className="eyebrow">Настройки</p>
           <h3>Персонализируйте приложение под себя</h3>
-          <p>Все пользовательские показатели теперь задаются здесь.</p>
+          <p>Все пользовательские показатели задаются здесь.</p>
         </div>
       </section>
 
-      <section className="content-grid">
-        <div className="card large">
+      <section className="settings-tabs" role="tablist" aria-label="Разделы настроек">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            className={`settings-tab ${activeTab === tab.key ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`settings-panel-${tab.key}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </section>
+
+      {/* General Tab */}
+      {activeTab === 'general' && (
+        <section className="card large" id="settings-panel-general" role="tabpanel">
           <h4>Основные настройки</h4>
-          <form className="settings-form" onSubmit={handleSubmit}>
+          <form className="settings-form" onSubmit={handleSubmit} noValidate>
             <label>
               Тема интерфейса
               <select value={theme} onChange={e => setTheme(e.target.value as 'dark' | 'light')}>
@@ -256,28 +297,66 @@ export default function SettingsPage() {
             </label>
 
             <label>
-              Месячный бюджет
+              Месячный бюджет <span style={{ color: 'var(--color-error)' }}>*</span>
               <input
                 type="number"
                 value={budget ?? ''}
-                onChange={e => setBudget(e.target.value ? Number(e.target.value) : null)}
+                onChange={e => {
+                  setBudget(e.target.value ? Number(e.target.value) : null);
+                  setBudgetError(false);
+                }}
                 min={1}
-                placeholder="Укажите сумму"
+                placeholder="Например, 80000"
+                className={budgetError ? 'input-error' : ''}
+                required
               />
             </label>
 
             <label>
-              Дней до зарплаты
+              Дней до зарплаты <span style={{ color: 'var(--color-error)' }}>*</span>
               <input
                 type="number"
                 value={salaryDays ?? ''}
-                onChange={e => setSalaryDays(e.target.value ? Number(e.target.value) : null)}
+                onChange={e => {
+                  setSalaryDays(e.target.value ? Number(e.target.value) : null);
+                  setSalaryDaysError(false);
+                }}
                 min={1}
-                placeholder="Укажите количество дней"
+                placeholder="Например, 18"
+                className={salaryDaysError ? 'input-error' : ''}
+                required
               />
             </label>
 
-            <div className="settings-section-heading">Параметры пенсии</div>
+            <label className="switch-label">
+              <span>Уведомления</span>
+              <input type="checkbox" checked={notifications} onChange={e => setNotifications(e.target.checked)} />
+            </label>
+
+            {message && <div className={message.includes('сохранены') ? 'auth-success' : 'auth-error'} role="status">{message}</div>}
+            <div className="settings-actions">
+              <button type="submit" className="primary-button">Сохранить настройки</button>
+              <button type="button" className="ghost-button" onClick={clearPurchases}>Очистить расходы</button>
+              <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить по умолчанию</button>
+            </div>
+
+            <div className="forecast-box" style={{ marginTop: 20 }}>
+              <p>Прогресс по семейным целям</p>
+              <strong>{familyProgress}%</strong>
+              <div className="bar-track" style={{ marginTop: 8 }}>
+                <span style={{ width: `${familyProgress}%` }} />
+              </div>
+              <small style={{ display: 'block', marginTop: 8 }}>{formatCurrency(totalFamily)} / {formatCurrency(totalGoals)}</small>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {/* Retirement Tab */}
+      {activeTab === 'retirement' && (
+        <section className="card large" id="settings-panel-retirement" role="tabpanel">
+          <h4>Параметры пенсии</h4>
+          <form className="settings-form" onSubmit={handleSubmit} noValidate>
             <label>
               Возраст
               <input
@@ -318,32 +397,17 @@ export default function SettingsPage() {
                 placeholder="Желаемая сумма"
               />
             </label>
-
-            <label className="switch-label">
-              <span>Уведомления</span>
-              <input type="checkbox" checked={notifications} onChange={e => setNotifications(e.target.checked)} />
-            </label>
-
-            {message && <div className="auth-success">{message}</div>}
+            {message && <div className="auth-success" role="status">{message}</div>}
             <div className="settings-actions">
-              <button type="submit" className="primary-button">Сохранить настройки</button>
-              <button type="button" className="ghost-button" onClick={clearPurchases}>Очистить расходы</button>
+              <button type="submit" className="primary-button">Сохранить параметры</button>
             </div>
-            <div style={{ marginTop: 12 }}>
-              <div className="forecast-box">
-                <p>Прогресс по семейным целям</p>
-                <strong>{familyProgress}%</strong>
-                <div style={{ height: 8, background: '#e6e6e6', borderRadius: 6, overflow: 'hidden', marginTop: 8 }}>
-                  <div style={{ width: `${familyProgress}%`, height: '100%', background: '#37c7ff' }} />
-                </div>
-                <small style={{ display: 'block', marginTop: 8 }}>{formatCurrency(totalFamily)} / {formatCurrency(totalGoals)}</small>
-              </div>
-            </div>
-            <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить настройки</button>
           </form>
-        </div>
+        </section>
+      )}
 
-        <div className="card large">
+      {/* Family Tab */}
+      {activeTab === 'family' && (
+        <section className="card large" id="settings-panel-family" role="tabpanel">
           <div className="settings-block">
             <div className="settings-block-head">
               <div>
@@ -359,9 +423,9 @@ export default function SettingsPage() {
                     <strong>{member.name}</strong>
                     <p>{member.role}</p>
                   </div>
-                  <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>{member.contribute.toLocaleString('ru-RU')} ₽</span>
-                    <button type="button" className="text-button" onClick={() => handleRemoveMember(member.id)}>Удалить</button>
+                    <button type="button" className="text-button" onClick={() => handleRemoveMember(member.id)} aria-label={`Удалить ${member.name}`}>Удалить</button>
                   </div>
                 </div>
               )) : (
@@ -391,7 +455,7 @@ export default function SettingsPage() {
                     <strong>{goal.title}</strong>
                     <p>Цель {goal.target.toLocaleString('ru-RU')} ₽</p>
                   </div>
-                  <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)}>Удалить</button>
+                  <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)} aria-label={`Удалить ${goal.title}`}>Удалить</button>
                 </div>
               )) : (
                 <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
@@ -403,7 +467,12 @@ export default function SettingsPage() {
               <button type="submit">Добавить цель</button>
             </form>
           </div>
+        </section>
+      )}
 
+      {/* Extras Tab */}
+      {activeTab === 'extras' && (
+        <section className="card large" id="settings-panel-extras" role="tabpanel">
           <div className="settings-block">
             <div className="settings-block-head">
               <div>
@@ -434,8 +503,8 @@ export default function SettingsPage() {
             </form>
             <p className="settings-note">Это число влияет на дашборд.</p>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

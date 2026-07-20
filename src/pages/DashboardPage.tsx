@@ -110,17 +110,17 @@ function getToday() {
 }
 
 function getSavedSuggestion() {
-  if (typeof window === 'undefined') return { name: 'iPhone', price: 120000 };
+  if (typeof window === 'undefined') return { name: '', price: 0 };
   const raw = window.localStorage.getItem('moneypilot-suggestedItem');
-  if (!raw) return { name: 'iPhone', price: 120000 };
+  if (!raw) return { name: '', price: 0 };
   try {
     const parsed = JSON.parse(raw) as { name: string; price: number };
     return {
-      name: parsed.name || 'iPhone',
-      price: Number.isFinite(parsed.price) && parsed.price > 0 ? parsed.price : 120000,
+      name: parsed.name || '',
+      price: Number.isFinite(parsed.price) && parsed.price > 0 ? parsed.price : 0,
     };
   } catch {
-    return { name: 'iPhone', price: 120000 };
+    return { name: '', price: 0 };
   }
 }
 
@@ -299,7 +299,9 @@ export default function DashboardPage() {
               : 'Добавьте первую покупку.'}
           </p>
           <p>
-            Если сегодня не покупать ничего лишнего, к концу месяца останется около <strong>{formatCurrency(25000 + remainingBudget)}</strong>.
+            {baseBudget !== null && daysToSalary !== null
+              ? <>Если сегодня не покупать ничего лишнего, к концу месяца останется около <strong>{formatCurrency(25000 + remainingBudget)}</strong>.</>
+              : 'Установите бюджет и дни до зарплаты в настройках.'}
           </p>
           <form className="inline-form" onSubmit={handleSubmit}>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Что купили?" />
@@ -328,10 +330,16 @@ export default function DashboardPage() {
           </div>
 
           <div className="card">
-            <p className="eyebrow">Что можно купить?</p>
-            <h4>{suggestion.name} · {formatCurrency(suggestion.price)}</h4>
-            <p>После такой покупки свободных денег останется {formatCurrency(Math.max(0, remainingBudget - suggestion.price))}.</p>
-            <p className="settings-note">Измените это предложение в <Link to="/settings">Настройках</Link>.</p>
+            <p className="eyebrow">Предложение дня</p>
+            {suggestion.name && suggestion.price > 0 ? (
+              <>
+                <h4>{suggestion.name} · {formatCurrency(suggestion.price)}</h4>
+                <p>После такой покупки свободных денег останется {formatCurrency(Math.max(0, remainingBudget - suggestion.price))}.</p>
+                <p className="settings-note">Измените это предложение в <Link to="/settings">Настройках</Link>.</p>
+              </>
+            ) : (
+              <p>Предложение не задано. Измените его в <Link to="/settings">Настройках</Link>.</p>
+            )}
           </div>
         </div>
       </section>

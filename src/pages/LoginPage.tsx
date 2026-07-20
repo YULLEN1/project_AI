@@ -8,36 +8,66 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   if (user) {
     return <Navigate to="/" replace />;
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = login(email.trim(), password);
-    if (!result.success) {
-      setError(result.message || 'Ошибка входа');
+    setError('');
+    if (!email.trim() || !password) {
+      setError('Заполните все поля.');
       return;
     }
-    navigate('/');
+    setLoading(true);
+    try {
+      const result = await login(email.trim(), password);
+      if (!result.success) {
+        setError(result.message || 'Ошибка входа');
+        return;
+      }
+      navigate('/');
+    } catch {
+      setError('Произошла ошибка. Попробуйте снова.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="auth-view">
       <h2>Войти</h2>
       <p className="auth-lead">Введите email и пароль, чтобы начать работу с личным кабинетом.</p>
-      <form className="auth-form" onSubmit={handleSubmit}>
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
         <label>
           Email
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            autoComplete="email"
+            required
+            autoFocus
+          />
         </label>
         <label>
           Пароль
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Введите пароль"
+            autoComplete="current-password"
+            required
+          />
         </label>
-        {error && <div className="auth-error">{error}</div>}
-        <button type="submit" className="primary-button">Войти</button>
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        <button type="submit" className="primary-button" disabled={loading}>
+          {loading ? 'Вход...' : 'Войти'}
+        </button>
       </form>
       <div className="auth-links">
         <Link to="/auth/reset">Забыли пароль?</Link>

@@ -11,9 +11,9 @@ interface AuthResult {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  login: (email: string, password: string) => AuthResult;
-  register: (email: string, password: string) => AuthResult;
-  resetPassword: (email: string, password: string) => AuthResult;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (email: string, password: string) => Promise<AuthResult>;
+  resetPassword: (email: string, password: string) => Promise<AuthResult>;
   logout: () => void;
 }
 
@@ -21,18 +21,35 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const storageKeyUser = 'moneypilot-user';
 const storageKeyUsers = 'moneypilot-users';
 
-function readUsers() {
-  if (typeof window === 'undefined') return [] as Array<{ email: string; password: string }>;
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+interface StoredUser {
+  email: string;
+  passwordHash: string;
+}
+
+function readUsers(): StoredUser[] {
+  if (typeof window === 'undefined') return [];
   const raw = window.localStorage.getItem(storageKeyUsers);
-  if (!raw) return [] as Array<{ email: string; password: string }>;
+  if (!raw) return [];
   try {
-    return JSON.parse(raw) as Array<{ email: string; password: string }>;
+    const parsed = JSON.parse(raw) as Array<{ email: string; password: string; passwordHash?: string }>;
+    return parsed.map(u => ({
+      email: u.email,
+      passwordHash: u.passwordHash || u.password,
+    }));
   } catch {
     return [];
   }
 }
 
-function writeUsers(users: Array<{ email: string; password: string }>) {
+function writeUsers(users: StoredUser[]) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(storageKeyUsers, JSON.stringify(users));
 }
@@ -64,13 +81,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     writeCurrentUser(user);
   }, [user]);
 
-  const login = (email: string, password: string): AuthResult => {
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     const users = readUsers();
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (!found) {
       return { success: false, message: 'Пользователь не найден. Проверьте email или зарегистрируйтесь.' };
     }
-    if (found.password !== password) {
+    const hash = await hashPassword(password);
+    if (found.passwordHash !== hash) {
       return { success: false, message: 'Неверный пароль. Попробуйте снова.' };
     }
     const authUser = { email: found.email };
@@ -78,25 +96,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   };
 
-  const register = (email: string, password: string): AuthResult => {
+  const register = async (email: string, password: string): Promise<AuthResult> => {
     const users = readUsers();
     if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
       return { success: false, message: 'Пользователь с этим email уже существует.' };
     }
     const normalizedEmail = email.trim().toLowerCase();
-    users.push({ email: normalizedEmail, password });
+    const passwordHash = await hashPassword(password);
+    users.push({ email: normalizedEmail, passwordHash });
     writeUsers(users);
     setUser({ email: normalizedEmail });
     return { success: true };
   };
 
-  const resetPassword = (email: string, password: string): AuthResult => {
+  const resetPassword = async (email: string, password: string): Promise<AuthResult> => {
     const users = readUsers();
     const index = users.findIndex(u => u.email.toLowerCase() === email.toLowerCase());
     if (index === -1) {
       return { success: false, message: 'Такой email не найден. Проверьте адрес.' };
     }
-    users[index].password = password;
+    users[index].passwordHash = await hashPassword(password);
     writeUsers(users);
     setUser({ email: users[index].email });
     return { success: true, message: 'Пароль обновлён. Вы уже вошли в систему.' };
