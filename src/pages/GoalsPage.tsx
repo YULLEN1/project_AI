@@ -86,8 +86,16 @@ export default function GoalsPage() {
     const projectedMonthEnd = avgDailySpend * salaryDays;
     const currentMonthlySavings = Math.max(0, budget - projectedMonthEnd);
 
-    const cafeEstimate = totalSpent * 0.15;
-    const subscriptionEstimate = 5000;
+    const cafeKeywords = ['кафе', 'кофе', 'еда', 'ресторан', 'доставка', 'обед', 'ужин', 'завтрак'];
+    const subscriptionKeywords = ['подписк', 'spotify', 'netflix', 'kinopoisk', 'yandex plus', 'apple', 'youtube premium'];
+
+    const cafeTotal = monthPurchases
+      .filter(p => cafeKeywords.some(kw => p.category.toLowerCase().includes(kw)))
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const subscriptionTotal = monthPurchases
+      .filter(p => subscriptionKeywords.some(kw => p.category.toLowerCase().includes(kw)))
+      .reduce((sum, p) => sum + p.amount, 0);
 
     return {
       budget,
@@ -95,15 +103,18 @@ export default function GoalsPage() {
       savings,
       totalSpent,
       currentMonthlySavings,
-      cafeEstimate,
-      subscriptionEstimate,
+      cafeTotal,
+      subscriptionTotal,
       daysLeft,
       projectedMonthEnd,
     };
   }, [tick]);
 
   const scenarios: ScenarioResult[] = useMemo(() => {
-    const { budget, cafeEstimate, subscriptionEstimate } = data;
+    const { budget, cafeTotal, subscriptionTotal } = data;
+
+    const cafeDelta = Math.round(cafeTotal * 0.3);
+    const subDelta = subscriptionTotal;
 
     return [
       {
@@ -114,15 +125,19 @@ export default function GoalsPage() {
       },
       {
         key: 'cafe',
-        label: 'Сократить кафе на 30%',
-        monthlyDelta: Math.round(cafeEstimate * 0.3),
-        description: `Экономия ${formatCurrency(Math.round(cafeEstimate * 0.3))}/мес при сокращении кафе.`,
+        label: cafeTotal > 0 ? `Сократить кафе на 30% (${formatCurrency(cafeTotal)}/мес)` : 'Сократить кафе на 30%',
+        monthlyDelta: cafeDelta,
+        description: cafeTotal > 0
+          ? `В категории «кафе/еда» за месяц: ${formatCurrency(cafeTotal)}. Сокращение на 30% = +${formatCurrency(cafeDelta)}/мес.`
+          : 'Нет расходов в категории «кафе/еда». Добавьте покупки с категорией, содержащей «кафе», «еда», «ресторан» и т.д.',
       },
       {
         key: 'subscriptions',
-        label: 'Отменить подписки',
-        monthlyDelta: subscriptionEstimate,
-        description: `Экономия ${formatCurrency(subscriptionEstimate)}/мес при полной отмене подписок.`,
+        label: subscriptionTotal > 0 ? `Отменить подписки (${formatCurrency(subscriptionTotal)}/мес)` : 'Отменить подписки',
+        monthlyDelta: subDelta,
+        description: subscriptionTotal > 0
+          ? `В категории «подписки» за месяц: ${formatCurrency(subscriptionTotal)}. Отмена = +${formatCurrency(subDelta)}/мес.`
+          : 'Нет расходов в категории «подписки». Добавьте покупки с категорией, содержащей «подписк», «spotify», «netflix» и т.д.',
       },
       {
         key: 'income',
