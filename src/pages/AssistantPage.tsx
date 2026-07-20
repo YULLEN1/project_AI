@@ -67,7 +67,7 @@ export default function AssistantPage() {
       const context = collectContext();
       const contextStr = JSON.stringify(context, null, 2);
 
-      const response = await fetch(`${API_URL}/chat/completions`, {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
