@@ -351,7 +351,7 @@ export default function DashboardPage() {
           <h4>ИИ-сообщение</h4>
           <p>
             {lastPurchase
-              ? `${lastPurchase.title} уже ${purchases.filter(item => item.title === lastPurchase.title).length}-я покупка в месяце. Средний чек — ${formatCurrency(averagePurchase)}.`
+              ? `${lastPurchase.title} — покупка №${filteredPurchases.length} за период. Средний чек — ${formatCurrency(averagePurchase)}.`
               : 'Добавьте первую покупку.'}
           </p>
           <p>
