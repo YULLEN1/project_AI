@@ -1,7 +1,5 @@
 import { FormEvent, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_AI_API_URL as string;
-
 type Purchase = {
   title: string;
   amount: number;
@@ -65,24 +63,16 @@ export default function AssistantPage() {
 
     try {
       const context = collectContext();
-      const contextStr = JSON.stringify(context, null, 2);
 
-      const response = await fetch(API_URL, {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'cloud-ai',
-          messages: [
-            { role: 'user', content: `Данные пользователя из приложения MoneyPilot:\n${contextStr}\n\nВопрос: ${text}` },
-          ],
-          temperature: 0.7,
-          max_tokens: 1024,
-        }),
+        body: JSON.stringify({ message: text, context }),
       });
 
       if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(`Ошибка ${response.status}: ${errText || response.statusText}`);
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.error || `Ошибка сервера: ${response.status}`);
       }
 
       const data = await response.json();
@@ -93,7 +83,7 @@ export default function AssistantPage() {
         setError('Пустой ответ от агента. Попробуйте переформулировать вопрос.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось связаться с агентом. Проверьте подключение.');
+      setError(err instanceof Error ? err.message : 'Не удалось связаться с агентом.');
     } finally {
       setLoading(false);
     }
