@@ -131,10 +131,33 @@ function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
 
+const CATEGORIES = ['Транспорт', 'Еда', 'Развлечения', 'Подписки', 'Здоровье', 'Одежда', 'Жильё', 'Образование', 'Разное'] as const;
+type CategoryKey = typeof CATEGORIES[number];
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  Транспорт: ['такси', 'метро', 'автобус', 'транспорт', 'яндекс.драйв', 'каршеринг', 'бензин', 'парковка', 'ж/д', 'поезд', 'самолёт', 'avia', 'railway'],
+  Еда: ['кафе', 'кофе', 'еда', 'ресторан', 'доставка', 'обед', 'ужин', 'завтрак', 'продукты', 'supermarket', 'пятёрочка', 'магнит', 'перекрёсток', 'вкусвилл', 'лента', 'шашлык', 'пицца', 'бургер', 'суши'],
+  Развлечения: ['кино', 'театр', 'концерт', 'игр', 'game', 'развлечен', 'бар', 'клуб', 'караоке', 'бильярд', 'bowling'],
+  Подписки: ['подписк', 'spotify', 'netflix', 'kinopoisk', 'yandex plus', 'apple', 'youtube premium', 'ivi', 'okko', 'premier', 'start', 'wink'],
+  Здоровье: ['аптека', 'лекарств', 'врач', 'доктор', 'больниц', 'clinic', 'стоматолог', 'анализ', 'медицин', 'спортзал', 'фитнес', 'тренажёр'],
+  Одежда: ['одежд', 'обувь', 'zara', 'hm', 'uniqlo', 'lamoda', 'wildberries', 'ozon одежду', 'brand'],
+  Жильё: ['аренд', 'жкх', 'коммунал', 'интернет', 'мобильн', 'связь', 'жильё', 'квартир'],
+  Образование: ['курс', 'обучен', 'учеб', 'книг', 'book', 'education', 'udemy', 'skillbox', 'stepik'],
+};
+
+function detectCategory(title: string): CategoryKey {
+  const lower = title.toLowerCase();
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(kw => lower.includes(kw))) return category as CategoryKey;
+  }
+  return 'Разное';
+}
+
 export default function DashboardPage() {
   const [purchases, setPurchases] = useState<Purchase[]>(() => readPurchases());
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState<CategoryKey>('Разное');
   const [date, setDate] = useState(getToday());
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
   const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
@@ -184,11 +207,12 @@ export default function DashboardPage() {
     setPurchases(prev => [...prev, {
       title: title.trim(),
       amount: parsedAmount,
-      category: 'Разное',
+      category,
       date: normalizeDate(date),
     }] );
     setTitle('');
     setAmount('');
+    setCategory('Разное');
   };
 
 
@@ -336,8 +360,11 @@ export default function DashboardPage() {
               : 'Установите бюджет и дни до зарплаты в настройках.'}
           </p>
           <form className="inline-form" onSubmit={handleSubmit}>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Что купили?" />
+            <input value={title} onChange={e => { setTitle(e.target.value); setCategory(detectCategory(e.target.value)); }} placeholder="Что купили?" />
             <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма" type="number" />
+            <select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
             <button type="submit">Добавить</button>
           </form>

@@ -770,7 +770,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 .theme-light .card ul, .theme-light .card p, .theme-light .card strong { color: #4d5c78; }
 .stack { display: grid; gap: 16px; }
 .inline-form, .chip-row, .input-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-.inline-form input, .input-grid input, textarea {
+.inline-form input, .inline-form select, .input-grid input, textarea {
   flex: 1;
   min-width: 140px;
   border: 1px solid rgba(255,255,255,0.12);
@@ -781,7 +781,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
-.theme-light .inline-form input,
+.theme-light .inline-form input, .theme-light .inline-form select,
 .theme-light .input-grid input,
 .theme-light textarea {
   border-color: rgba(46, 70, 104, 0.16);

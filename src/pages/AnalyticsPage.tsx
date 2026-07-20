@@ -117,8 +117,7 @@ export default function AnalyticsPage() {
     }, {});
 
     const sortedCategories = Object.entries(categoryTotals)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3);
+      .sort((a, b) => b[1] - a[1]);
 
     const total = filteredPurchases.reduce((sum, item) => sum + item.amount, 0);
     const trend =
