@@ -21,6 +21,8 @@ type FamilyMember = {
   role: string;
   contribute: number;
   color: string;
+  nextIncomeDate?: string;
+  incomeAmount?: number;
 };
 
 type FamilyGoal = {
@@ -97,6 +99,8 @@ export default function SettingsPage() {
   const [memberName, setMemberName] = useState('');
   const [memberRole, setMemberRole] = useState('Доход');
   const [memberAmount, setMemberAmount] = useState('');
+  const [memberIncomeDate, setMemberIncomeDate] = useState('');
+  const [memberIncomeAmount, setMemberIncomeAmount] = useState('');
   const [goalTitle, setGoalTitle] = useState('');
   const [goalTarget, setGoalTarget] = useState('');
   const [suggestionName, setSuggestionName] = useState(suggestion.name);
@@ -193,10 +197,17 @@ export default function SettingsPage() {
       contribute: parsed,
       color: '#37c7ff',
     };
+    if (memberIncomeDate) next.nextIncomeDate = memberIncomeDate;
+    if (memberIncomeAmount) {
+      const inc = Number(memberIncomeAmount);
+      if (Number.isFinite(inc) && inc > 0) next.incomeAmount = inc;
+    }
     handleSaveMembers([...members, next]);
     setMemberName('');
     setMemberRole('Доход');
     setMemberAmount('');
+    setMemberIncomeDate('');
+    setMemberIncomeAmount('');
   };
 
   const handleRemoveMember = (id: string) => handleSaveMembers(members.filter(m => m.id !== id));
@@ -416,6 +427,8 @@ export default function SettingsPage() {
               <input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" />
               <input value={memberRole} onChange={e => setMemberRole(e.target.value)} placeholder="Роль (Доход/Расход)" />
               <input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Сумма" type="number" />
+              <input value={memberIncomeDate} onChange={e => setMemberIncomeDate(e.target.value)} type="date" title="Дата следующего дохода" />
+              <input value={memberIncomeAmount} onChange={e => setMemberIncomeAmount(e.target.value)} placeholder="Доход, ₽" type="number" />
               <button type="submit">Добавить</button>
             </form>
           </div>

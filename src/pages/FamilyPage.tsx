@@ -7,6 +7,8 @@ type FamilyMember = {
   role: string;
   contribute: number;
   color: string;
+  nextIncomeDate?: string;
+  incomeAmount?: number;
 };
 
 type FamilyGoal = {
@@ -39,6 +41,13 @@ function readGoals() {
 
 function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
+}
+
+function daysUntil(dateString: string) {
+  const now = new Date();
+  const target = new Date(dateString);
+  const diff = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return diff;
 }
 
 export default function FamilyPage() {
@@ -93,6 +102,16 @@ export default function FamilyPage() {
                 <div>
                   <strong>{member.name}</strong>
                   <p>{member.role}</p>
+                  {member.nextIncomeDate && member.incomeAmount ? (
+                    <p style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                      Доход {formatCurrency(member.incomeAmount)} · {(() => {
+                        const d = daysUntil(member.nextIncomeDate);
+                        if (d < 0) return 'просрочен';
+                        if (d === 0) return 'сегодня';
+                        return `через ${d} дн.`;
+                      })()}
+                    </p>
+                  ) : null}
                 </div>
                 <span>{formatCurrency(member.contribute)}</span>
               </div>
