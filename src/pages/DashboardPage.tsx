@@ -332,7 +332,7 @@ export default function DashboardPage() {
           </p>
           <p>
             {baseBudget !== null && daysToSalary !== null
-              ? <>Если сегодня не покупать ничего лишнего, к концу месяца останется около <strong>{formatCurrency(25000 + remainingBudget)}</strong>.</>
+              ? <>Если сегодня не покупать ничего лишнего, к концу периода останется <strong>{formatCurrency(Math.max(0, remainingBudget))}</strong>.</>
               : 'Установите бюджет и дни до зарплаты в настройках.'}
           </p>
           <form className="inline-form" onSubmit={handleSubmit}>

@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 const storageKeys = {
-  theme: 'moneypilot-theme',
   budget: 'moneypilot-budget',
   salaryDays: 'moneypilot-daysToSalary',
   notifications: 'moneypilot-notifications',
@@ -64,7 +63,6 @@ function formatCurrency(value: number) {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [budget, setBudget] = useState<number | null>(null);
   const [salaryDays, setSalaryDays] = useState<number | null>(null);
   const [retirementAge, setRetirementAge] = useState<number | null>(null);
@@ -109,8 +107,6 @@ export default function SettingsPage() {
   const [salaryDaysError, setSalaryDaysError] = useState(false);
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem(storageKeys.theme);
-    setTheme(savedTheme === 'light' ? 'light' : 'dark');
     setBudget(readNumberOrNull(storageKeys.budget));
     setSalaryDays(readNumberOrNull(storageKeys.salaryDays));
     setRetirementAge(readNumberOrNull(storageKeys.retirementAge));
@@ -143,7 +139,6 @@ export default function SettingsPage() {
       setMessage('Заполните обязательные поля: бюджет и дни до зарплаты.');
       return;
     }
-    window.localStorage.setItem(storageKeys.theme, theme);
     window.localStorage.setItem(storageKeys.budget, String(budget));
     window.localStorage.setItem(storageKeys.salaryDays, String(salaryDays));
     if (retirementAge !== null) {
@@ -176,17 +171,15 @@ export default function SettingsPage() {
   };
 
   const resetDefaults = () => {
-    window.localStorage.removeItem(storageKeys.theme);
     window.localStorage.removeItem(storageKeys.budget);
     window.localStorage.removeItem(storageKeys.salaryDays);
     window.localStorage.removeItem(storageKeys.notifications);
-    setTheme('dark');
-    setBudget(118000);
-    setSalaryDays(18);
+    setBudget(null);
+    setSalaryDays(null);
     setNotifications(true);
     setBudgetError(false);
     setSalaryDaysError(false);
-    setMessage('Настройки восстановлены по умолчанию.');
+    setMessage('Настройки сброшены. Заполните бюджет и дни до зарплаты.');
   };
 
   const handleAddMember = (e: FormEvent) => {
@@ -283,14 +276,6 @@ export default function SettingsPage() {
         <section className="card large" id="settings-panel-general" role="tabpanel">
           <h4>Основные настройки</h4>
           <form className="settings-form" onSubmit={handleSubmit} noValidate>
-            <label>
-              Тема интерфейса
-              <select value={theme} onChange={e => setTheme(e.target.value as 'dark' | 'light')}>
-                <option value="dark">Тёмная</option>
-                <option value="light">Светлая</option>
-              </select>
-            </label>
-
             <label>
               Месячный бюджет <span style={{ color: 'var(--color-error)' }}>*</span>
               <input

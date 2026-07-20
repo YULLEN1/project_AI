@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
 const retirementKeys = {
   age: 'moneypilot-retirement-age',
@@ -17,10 +18,10 @@ function formatCurrency(value: number) {
 }
 
 export default function RetirementPage() {
-  const [age, setAge] = useState(() => readString(retirementKeys.age));
-  const [income, setIncome] = useState(() => readString(retirementKeys.income));
-  const [savings, setSavings] = useState(() => readString(retirementKeys.savings));
-  const [target, setTarget] = useState(() => readString(retirementKeys.target));
+  const age = readString(retirementKeys.age);
+  const income = readString(retirementKeys.income);
+  const savings = readString(retirementKeys.savings);
+  const target = readString(retirementKeys.target);
 
   const projection = useMemo(() => {
     if (!age || !income || !savings) return null;
@@ -34,13 +35,10 @@ export default function RetirementPage() {
     return Number(target) - projection;
   }, [projection, target]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(retirementKeys.age, age);
-    window.localStorage.setItem(retirementKeys.income, income);
-    window.localStorage.setItem(retirementKeys.savings, savings);
-    window.localStorage.setItem(retirementKeys.target, target);
-  }, [age, income, savings, target]);
+  const monthlyContribution = useMemo(() => {
+    if (!income) return null;
+    return Math.round(Number(income) * 0.08);
+  }, [income]);
 
   return (
     <div className="page-grid">
@@ -53,29 +51,37 @@ export default function RetirementPage() {
       </section>
 
       <section className="card large">
-        <div className="input-grid">
-          <label>
-            <span>Возраст</span>
-            <input value={age} onChange={e => setAge(e.target.value)} />
-          </label>
-          <label>
-            <span>Доход</span>
-            <input value={income} onChange={e => setIncome(e.target.value)} />
-          </label>
-          <label>
-            <span>Накопления</span>
-            <input value={savings} onChange={e => setSavings(e.target.value)} />
-          </label>
-          <label>
-            <span>Планируемая пенсия</span>
-            <input value={target} onChange={e => setTarget(e.target.value)} />
-          </label>
-        </div>
-        <div className="forecast-box">
-          <p>Если откладывать по 15 000 ₽ в месяц, к 60 годам можно накопить</p>
-          <strong>{projection !== null ? formatCurrency(projection) : 'Задайте параметры в настройках'}</strong>
-          <span>{goalDiff !== null ? `Цель ${formatCurrency(Number(target))}, разрыв ${formatCurrency(goalDiff)}` : 'Заполните возраст, доход и накопления'}</span>
-        </div>
+        {age && income && savings ? (
+          <>
+            <div className="input-grid">
+              <label>
+                <span>Возраст: {age}</span>
+              </label>
+              <label>
+                <span>Доход: {formatCurrency(Number(income))}</span>
+              </label>
+              <label>
+                <span>Накопления: {formatCurrency(Number(savings))}</span>
+              </label>
+              <label>
+                <span>Цель: {target ? formatCurrency(Number(target)) : 'Не задана'}</span>
+              </label>
+            </div>
+            <div className="forecast-box">
+              <p>
+                {monthlyContribution !== null
+                  ? `Откладывая ${formatCurrency(monthlyContribution)}/мес (8% от дохода), к 60 годам можно накопить`
+                  : 'Рассчитайте накопления'}
+              </p>
+              <strong>{projection !== null ? formatCurrency(projection) : '—'}</strong>
+              <span>{goalDiff !== null ? `Цель ${formatCurrency(Number(target))}, разрыв ${formatCurrency(goalDiff)}` : ''}</span>
+            </div>
+          </>
+        ) : (
+          <div className="empty-cell">
+            <p>Заполните параметры пенсии в <Link to="/settings">Настройках</Link>, чтобы увидеть расчёт.</p>
+          </div>
+        )}
       </section>
     </div>
   );

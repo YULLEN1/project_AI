@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 type Purchase = {
   title: string;
@@ -74,6 +75,7 @@ export default function GoalsPage() {
     const salaryDays = readNumber('moneypilot-daysToSalary') ?? 30;
     const savings = readNumber('moneypilot-savings') ?? 0;
     const purchases = readJson<Purchase[]>('moneypilot-purchases', []);
+    const suggestedItem = readJson<{ name: string; price: number }>('moneypilot-suggestedItem', { name: '', price: 0 });
     const monthDates = getMonthDates();
     const today = getLocalToday();
 
@@ -107,6 +109,7 @@ export default function GoalsPage() {
       subscriptionTotal,
       daysLeft,
       projectedMonthEnd,
+      suggestedItem,
     };
   }, [tick]);
 
@@ -158,11 +161,12 @@ export default function GoalsPage() {
   }, [data, selected, savingsRate]);
 
   const canBuy = useMemo(() => {
-    if (forecast.monthly <= 0) return { item: '—', days: Infinity };
-    const target = 120000;
-    const weeks = Math.ceil(target / (forecast.monthly * 12 / 52));
-    return { item: 'iPhone', days: weeks * 7 };
-  }, [forecast]);
+    if (forecast.monthly <= 0 || !data.suggestedItem.name || data.suggestedItem.price <= 0) {
+      return { name: '', price: 0, days: Infinity };
+    }
+    const weeks = Math.ceil(data.suggestedItem.price / (forecast.monthly * 12 / 52));
+    return { name: data.suggestedItem.name, price: data.suggestedItem.price, days: weeks * 7 };
+  }, [forecast, data.suggestedItem]);
 
   return (
     <div className="page-grid">
@@ -207,12 +211,21 @@ export default function GoalsPage() {
       <section className="content-grid">
         <div className="card reveal-card">
           <p className="eyebrow">Что можно купить?</p>
-          <h4>{canBuy.item} · 120 000 ₽</h4>
-          <p>
-            {canBuy.days < Infinity
-              ? `Можно купить через ${canBuy.days} дн., если откладывать ${formatCurrency(forecast.monthly)}/мес.`
-              : 'Сначала увеличьте ставку накоплений или доход.'}
-          </p>
+          {canBuy.name ? (
+            <>
+              <h4>{canBuy.name} · {formatCurrency(canBuy.price)}</h4>
+              <p>
+                {canBuy.days < Infinity
+                  ? `Можно купить через ${canBuy.days} дн., если откладывать ${formatCurrency(forecast.monthly)}/мес.`
+                  : 'Сначала увеличьте ставку накоплений или доход.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <h4>Добавьте товар</h4>
+              <p>Укажите «Что можно купить» в <Link to="/settings">Настройках</Link>, чтобы увидеть расчёт.</p>
+            </>
+          )}
         </div>
         <div className="card reveal-card">
           <p className="eyebrow">Рекомендация</p>
