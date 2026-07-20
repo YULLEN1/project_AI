@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 const storageKeys = {
   theme: 'moneypilot-theme',
@@ -108,7 +108,7 @@ export default function SettingsPage() {
   const [budgetError, setBudgetError] = useState(false);
   const [salaryDaysError, setSalaryDaysError] = useState(false);
 
-  const loadFromStorage = () => {
+  useEffect(() => {
     const savedTheme = window.localStorage.getItem(storageKeys.theme);
     setTheme(savedTheme === 'light' ? 'light' : 'dark');
     setBudget(readNumberOrNull(storageKeys.budget));
@@ -118,12 +118,7 @@ export default function SettingsPage() {
     setRetirementSavings(readNumberOrNull(storageKeys.retirementSavings));
     setRetirementTarget(readNumberOrNull(storageKeys.retirementTarget));
     setNotifications(readBoolean(storageKeys.notifications, true));
-  };
-
-  // Load from localStorage on mount
-  if (budget === null && salaryDays === null) {
-    loadFromStorage();
-  }
+  }, []);
 
   const handleSaveMembers = (newMembers: FamilyMember[]) => {
     setMembers(newMembers);

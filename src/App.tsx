@@ -29,10 +29,37 @@ function RedirectIfAuthed({ children }: { children: JSX.Element }) {
   return children;
 }
 
+function ErrorFallback() {
+  return (
+    <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24, color: '#d0d9ee' }}>
+      <div style={{ textAlign: 'center', maxWidth: 480 }}>
+        <h1 style={{ fontSize: '1.5rem', marginBottom: 12 }}>Что-то пошло не так</h1>
+        <p style={{ color: '#8aa2ca', marginBottom: 20 }}>Произошла непредвиденная ошибка. Попробуйте перезагрузить страницу.</p>
+        <button
+          onClick={() => window.location.assign('/')}
+          style={{
+            padding: '12px 24px',
+            borderRadius: 14,
+            border: 'none',
+            background: 'linear-gradient(135deg, #37c7ff, #8b6dff)',
+            color: '#fff',
+            fontWeight: 700,
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+          }}
+        >
+          На главную
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const router = createBrowserRouter([
   {
     path: '/auth',
     element: <AuthLayout />,
+    errorElement: <ErrorFallback />,
     children: [
       { index: true, element: <Navigate to="login" replace /> },
       { path: 'login', element: <RedirectIfAuthed><LoginPage /></RedirectIfAuthed> },
@@ -47,6 +74,7 @@ const router = createBrowserRouter([
         <Layout />
       </RequireAuth>
     ),
+    errorElement: <ErrorFallback />,
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'analytics', element: <AnalyticsPage /> },
