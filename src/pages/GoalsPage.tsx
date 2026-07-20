@@ -88,7 +88,7 @@ export default function GoalsPage() {
     const projectedMonthEnd = avgDailySpend * salaryDays;
     const currentMonthlySavings = Math.max(0, budget - projectedMonthEnd);
 
-    const cafeKeywords = ['кафе', 'кофе', 'еда', 'ресторан', 'доставка', 'обед', 'ужин', 'завтрак'];
+    const cafeKeywords = ['кафе', 'кофе', 'кофейн', 'еда', 'ресторан', 'доставка', 'обед', 'ужин', 'завтрак'];
     const subscriptionKeywords = ['подписк', 'spotify', 'netflix', 'kinopoisk', 'yandex plus', 'apple', 'youtube premium'];
 
     const cafeTotal = monthPurchases
