@@ -32,9 +32,10 @@ function getLocalToday() {
 }
 
 function getSavedSelectedDate() {
-  if (typeof window === 'undefined') return getLocalToday();
+  const today = getLocalToday();
+  if (typeof window === 'undefined') return today;
   const raw = window.localStorage.getItem('moneypilot-selectedDate');
-  return raw || getLocalToday();
+  return raw === today ? raw : today;
 }
 
 function normalizeDate(value: string) {

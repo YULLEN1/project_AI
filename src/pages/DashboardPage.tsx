@@ -46,9 +46,10 @@ function getSavedRange() {
 }
 
 function getSavedSelectedDate() {
-  if (typeof window === 'undefined') return getToday();
+  const today = getToday();
+  if (typeof window === 'undefined') return today;
   const raw = window.localStorage.getItem('moneypilot-selectedDate');
-  return raw || getToday();
+  return raw === today ? raw : today;
 }
 
 function getSavedSavings() {
