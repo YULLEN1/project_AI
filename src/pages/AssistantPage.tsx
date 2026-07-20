@@ -65,15 +65,19 @@ export default function AssistantPage() {
 
     try {
       const context = collectContext();
-      const body = {
-        message: text,
-        context,
-      };
+      const contextStr = JSON.stringify(context, null, 2);
 
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_URL}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          model: 'cloud-ai',
+          messages: [
+            { role: 'user', content: `Данные пользователя из приложения MoneyPilot:\n${contextStr}\n\nВопрос: ${text}` },
+          ],
+          temperature: 0.7,
+          max_tokens: 1024,
+        }),
       });
 
       if (!response.ok) {
@@ -82,9 +86,9 @@ export default function AssistantPage() {
       }
 
       const data = await response.json();
-      const reply = data.reply || data.message || data.content || data.answer || data.response || data.text || data.result?.[0]?.text || JSON.stringify(data);
+      const reply = data.choices?.[0]?.message?.content;
       if (reply) {
-        setAnswer(typeof reply === 'string' ? reply : JSON.stringify(reply));
+        setAnswer(reply);
       } else {
         setError('Пустой ответ от агента. Попробуйте переформулировать вопрос.');
       }
