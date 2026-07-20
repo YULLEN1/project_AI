@@ -248,17 +248,46 @@ export default function DashboardPage() {
         <article className="metric-card">
           <span>Можно тратить сегодня</span>
           <strong>{baseBudget !== null && daysToSalary !== null ? formatCurrency(Math.round(dailyBudget)) : 'Настройте данные'}</strong>
-          <div className="mini-pill">{baseBudget !== null ? '+8% к среднему' : 'Через настройки'}</div>
+          {baseBudget !== null && filteredPurchases.length > 0 ? (
+            <div className="mini-pill">
+              {(() => {
+                const avgPerDay = totalSpent / Math.max(1, rangeDates.filter(d => d <= getToday()).length);
+                const diff = Math.round(((dailyBudget - avgPerDay) / Math.max(1, avgPerDay)) * 100);
+                return diff >= 0 ? `+${diff}% к среднему` : `${diff}% к среднему`;
+              })()}
+            </div>
+          ) : (
+            <div className="mini-pill">Через настройки</div>
+          )}
         </article>
         <article className="metric-card">
           <span>Уже потрачено</span>
           <strong>{formatCurrency(totalSpent)}</strong>
-          <div className="mini-pill warning">{purchases.length ? '13% выше нормы' : 'Нет расходов'}</div>
+          {baseBudget !== null && daysToSalary !== null && totalSpent > 0 ? (
+            <div className="mini-pill warning">
+              {(() => {
+                const budgetForPeriod = (baseBudget / (daysToSalary + rangeDates.filter(d => d <= getToday()).length)) * rangeDates.filter(d => d <= getToday()).length;
+                const pct = Math.round(((totalSpent - budgetForPeriod) / Math.max(1, budgetForPeriod)) * 100);
+                return pct > 0 ? `${pct}% выше плана` : `${Math.abs(pct)}% ниже плана`;
+              })()}
+            </div>
+          ) : (
+            <div className="mini-pill">Нет расходов</div>
+          )}
         </article>
         <article className="metric-card">
           <span>Остаток лимита</span>
           <strong>{baseBudget !== null ? formatCurrency(remainingBudget) : 'Настройте данные'}</strong>
-          <div className="mini-pill good">{baseBudget !== null ? '+12 400 ₽ к цели' : 'Через настройки'}</div>
+          {baseBudget !== null ? (
+            <div className={`mini-pill ${remainingBudget >= 0 ? 'good' : 'warning'}`}>
+              {remainingBudget >= 0
+                ? `${formatCurrency(remainingBudget)} до конца`
+                : `Превышение ${formatCurrency(Math.abs(remainingBudget))}`
+              }
+            </div>
+          ) : (
+            <div className="mini-pill">Через настройки</div>
+          )}
         </article>
         <article className="metric-card">
           <span>Накопления</span>
