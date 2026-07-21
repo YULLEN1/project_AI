@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 const storageKeys = {
   budget: 'moneypilot-budget',
@@ -296,10 +296,6 @@ export default function SettingsPage() {
     window.localStorage.setItem(storageKeys.savings, String(parsed));
     setMessage('Накопления сохранены.');
   };
-
-  const totalFamily = useMemo(() => members.reduce((sum, member) => sum + member.contribute, 0), [members]);
-  const totalGoals = useMemo(() => familyGoalsList.reduce((sum, goal) => sum + goal.target, 0), [familyGoalsList]);
-  const familyProgress = totalGoals > 0 ? Math.min(100, Math.round((totalFamily / totalGoals) * 100)) : 0;
 
   const tabs: Array<{ key: SettingsTab; label: string }> = [
     { key: 'general', label: 'Основные' },
