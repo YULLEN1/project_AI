@@ -24,6 +24,7 @@ function readNumber(key: string): number | null {
 
 function collectContext() {
   return {
+    currency: '₽ (рубли)',
     budget: readNumber('moneypilot-budget'),
     salaryDays: readNumber('moneypilot-daysToSalary'),
     savings: readNumber('moneypilot-savings'),
