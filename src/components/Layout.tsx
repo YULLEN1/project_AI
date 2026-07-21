@@ -14,7 +14,7 @@ const navGroups = [
     label: 'Планирование',
     items: [
       { to: '/goals', label: 'Планы', icon: '◍' },
-      { to: '/retirement', label: 'Пенсия', icon: '◎' },
+      { to: '/retirement', label: 'Накопления', icon: '◎' },
       { to: '/family', label: 'Семья', icon: '⬢' },
     ],
   },

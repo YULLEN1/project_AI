@@ -1,88 +1,143 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-const retirementKeys = {
-  age: 'moneypilot-retirement-age',
-  income: 'moneypilot-retirement-income',
-  savings: 'moneypilot-retirement-savings',
-  target: 'moneypilot-retirement-target',
+type SavingsGoal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetAge: number;
+  currentSavings: number;
 };
-
-function readString(key: string) {
-  if (typeof window === 'undefined') return '';
-  return window.localStorage.getItem(key) ?? '';
-}
 
 function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
 
+function readJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return fallback;
+  try { return JSON.parse(raw) as T; }
+  catch { return fallback; }
+}
+
+function readNumber(key: string): number | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(key);
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export default function RetirementPage() {
-  const age = readString(retirementKeys.age);
-  const income = readString(retirementKeys.income);
-  const savings = readString(retirementKeys.savings);
-  const target = readString(retirementKeys.target);
+  const userAge = readNumber('moneypilot-user-age');
+  const goals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
 
-  const projection = useMemo(() => {
-    if (!age || !income || !savings) return null;
-    const monthly = Number(income) * 0.08;
-    const annual = monthly * 12 + Number(savings) * 0.06;
-    return Math.round(annual * (60 - Number(age)) / 2);
-  }, [age, income, savings]);
+  const calculated = useMemo(() => {
+    if (!userAge || goals.length === 0) return null;
+    return goals.map(goal => {
+      const yearsLeft = Math.max(1, goal.targetAge - userAge);
+      const monthsLeft = yearsLeft * 12;
+      const remaining = Math.max(0, goal.targetAmount - goal.currentSavings);
+      const monthly = Math.round(remaining / monthsLeft);
+      const progress = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentSavings / goal.targetAmount) * 100)) : 0;
+      return { ...goal, yearsLeft, monthsLeft, remaining, monthly, progress };
+    });
+  }, [userAge, goals]);
 
-  const goalDiff = useMemo(() => {
-    if (!projection || !target) return null;
-    return Number(target) - projection;
-  }, [projection, target]);
+  const totalMonthly = useMemo(() => {
+    if (!calculated) return 0;
+    return calculated.reduce((s, g) => s + g.monthly, 0);
+  }, [calculated]);
 
-  const monthlyContribution = useMemo(() => {
-    if (!income) return null;
-    return Math.round(Number(income) * 0.08);
-  }, [income]);
+  if (!userAge) {
+    return (
+      <div className="page-grid">
+        <section className="hero-panel compact">
+          <div>
+            <p className="eyebrow">Цели накоплений</p>
+            <h3>Планируйте крупные покупки</h3>
+            <p>Квартира, машина, пенсия, образование детей — любые цели.</p>
+          </div>
+        </section>
+        <div className="card large">
+          <div className="empty-cell">
+            <p>Укажите свой возраст в <Link to="/settings">Настройках → Основные</Link>, чтобы увидеть расчёты.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (goals.length === 0) {
+    return (
+      <div className="page-grid">
+        <section className="hero-panel compact">
+          <div>
+            <p className="eyebrow">Цели накоплений</p>
+            <h3>Планируйте крупные покупки</h3>
+            <p>Добавьте первую цель в <Link to="/settings">Настройках → Цели</Link>.</p>
+          </div>
+        </section>
+        <div className="card large">
+          <div className="empty-cell">
+            <p>Добавьте цель в <Link to="/settings">Настройках</Link>, чтобы увидеть план накоплений.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-grid">
       <section className="hero-panel compact">
         <div>
-          <p className="eyebrow">Пенсионный калькулятор</p>
-          <h3>Смотрите, как ваши решения влияют на будущее</h3>
-          <p>Моделируйте повышение дохода, смену работы, покупку квартиры или рождение ребёнка.</p>
+          <p className="eyebrow">Цели накоплений</p>
+          <h3>Планируйте крупные покупки</h3>
+          <p>Ваш возраст: {userAge} лет · Всего {formatCurrency(totalMonthly)}/мес на все цели</p>
         </div>
+        <div className="hero-badge">{goals.length} {goals.length === 1 ? 'цель' : goals.length < 5 ? 'цели' : 'целей'}</div>
       </section>
 
-      <section className="card large">
-        {age && income && savings ? (
-          <>
-            <div className="input-grid">
-              <label>
-                <span>Возраст: {age}</span>
-              </label>
-              <label>
-                <span>Доход: {formatCurrency(Number(income))}</span>
-              </label>
-              <label>
-                <span>Накопления: {formatCurrency(Number(savings))}</span>
-              </label>
-              <label>
-                <span>Цель: {target ? formatCurrency(Number(target)) : 'Не задана'}</span>
-              </label>
-            </div>
-            <div className="forecast-box">
-              <p>
-                {monthlyContribution !== null
-                  ? `Откладывая ${formatCurrency(monthlyContribution)}/мес (8% от дохода), к 60 годам можно накопить`
-                  : 'Рассчитайте накопления'}
-              </p>
-              <strong>{projection !== null ? formatCurrency(projection) : '—'}</strong>
-              <span>{goalDiff !== null ? `Цель ${formatCurrency(Number(target))}, разрыв ${formatCurrency(goalDiff)}` : ''}</span>
-            </div>
-          </>
-        ) : (
-          <div className="empty-cell">
-            <p>Заполните параметры пенсии в <Link to="/settings">Настройках</Link>, чтобы увидеть расчёт.</p>
-          </div>
-        )}
-      </section>
+      <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+        {calculated!.map(goal => {
+          const pct = goal.progress;
+          return (
+            <article key={goal.id} className="card">
+              <div className="assistant-header">
+                <div>
+                  <p className="eyebrow">до {goal.targetAge} лет</p>
+                  <h4>{goal.name}</h4>
+                </div>
+                <span>{goal.yearsLeft} {goal.yearsLeft === 1 ? 'год' : goal.yearsLeft < 5 ? 'года' : 'лет'}</span>
+              </div>
+
+              <div className="bar-track" style={{ margin: '12px 0 8px' }}>
+                <span style={{ width: `${pct}%` }} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-sm)', marginBottom: 12, color: '#b8cfe8' }}>
+                <span>{formatCurrency(goal.currentSavings)}</span>
+                <span>{formatCurrency(goal.targetAmount)}</span>
+              </div>
+
+              <div className="forecast-box">
+                <p style={{ margin: 0 }}>
+                  {goal.remaining > 0
+                    ? <>Нужно ещё <strong>{formatCurrency(goal.remaining)}</strong> · <strong>{formatCurrency(goal.monthly)}/мес</strong></>
+                    : '✅ Цель достигнута!'}
+                </p>
+              </div>
+
+              {goal.remaining > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12, fontSize: 'var(--font-size-sm)', color: '#b8cfe8' }}>
+                  <span>Осталось месяцев: {goal.monthsLeft}</span>
+                  <span style={{ textAlign: 'right' }}>Прогресс: {pct}%</span>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }

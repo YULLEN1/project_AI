@@ -30,8 +30,8 @@ function collectContext() {
     purchases: readJson('moneypilot-purchases', []),
     familyMembers: readJson('moneypilot-family-members', []),
     familyGoals: readJson('moneypilot-family-goals', []),
-    retirementAge: readNumber('moneypilot-retirement-age'),
-    retirementIncome: readNumber('moneypilot-retirement-income'),
+    userAge: readNumber('moneypilot-user-age'),
+    savingsGoals: readJson('moneypilot-savings-goals', []),
     suggestedItem: readJson('moneypilot-suggestedItem', null),
   };
 }

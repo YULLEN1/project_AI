@@ -5,10 +5,8 @@ const storageKeys = {
   salaryDays: 'moneypilot-daysToSalary',
   notifications: 'moneypilot-notifications',
   purchases: 'moneypilot-purchases',
-  retirementAge: 'moneypilot-retirement-age',
-  retirementIncome: 'moneypilot-retirement-income',
-  retirementSavings: 'moneypilot-retirement-savings',
-  retirementTarget: 'moneypilot-retirement-target',
+  userAge: 'moneypilot-user-age',
+  savingsGoals: 'moneypilot-savings-goals',
   familyMembers: 'moneypilot-family-members',
   familyGoals: 'moneypilot-family-goals',
   suggestedItem: 'moneypilot-suggestedItem',
@@ -36,7 +34,15 @@ type SuggestedItem = {
   price: number;
 };
 
-type SettingsTab = 'general' | 'retirement' | 'family' | 'extras';
+type SavingsGoal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetAge: number;
+  currentSavings: number;
+};
+
+type SettingsTab = 'general' | 'goals' | 'family' | 'extras';
 
 function readBoolean(key: string, fallback: boolean) {
   const raw = window.localStorage.getItem(key);
@@ -63,14 +69,35 @@ function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
 
+function migrateOldRetirement() {
+  const oldAge = window.localStorage.getItem('moneypilot-retirement-age');
+  const oldIncome = window.localStorage.getItem('moneypilot-retirement-income');
+  const oldSavings = window.localStorage.getItem('moneypilot-retirement-savings');
+  const oldTarget = window.localStorage.getItem('moneypilot-retirement-target');
+  if (oldAge || oldIncome || oldSavings || oldTarget) {
+    const existing = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
+    if (existing.length === 0) {
+      const goal: SavingsGoal = {
+        id: 'retirement-migrated',
+        name: 'Пенсия',
+        targetAmount: oldTarget ? Number(oldTarget) : 5000000,
+        targetAge: 60,
+        currentSavings: oldSavings ? Number(oldSavings) : 0,
+      };
+      window.localStorage.setItem('moneypilot-savings-goals', JSON.stringify([goal]));
+    }
+    window.localStorage.removeItem('moneypilot-retirement-age');
+    window.localStorage.removeItem('moneypilot-retirement-income');
+    window.localStorage.removeItem('moneypilot-retirement-savings');
+    window.localStorage.removeItem('moneypilot-retirement-target');
+  }
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [budget, setBudget] = useState<number | null>(null);
   const [salaryDays, setSalaryDays] = useState<number | null>(null);
-  const [retirementAge, setRetirementAge] = useState<number | null>(null);
-  const [retirementIncome, setRetirementIncome] = useState<number | null>(null);
-  const [retirementSavings, setRetirementSavings] = useState<number | null>(null);
-  const [retirementTarget, setRetirementTarget] = useState<number | null>(null);
+  const [userAge, setUserAge] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -79,9 +106,15 @@ export default function SettingsPage() {
     return readJson(storageKeys.familyMembers, [] as FamilyMember[]);
   });
 
-  const [goals, setGoals] = useState<FamilyGoal[]>(() => {
+  const [familyGoalsList, setFamilyGoalsList] = useState<FamilyGoal[]>(() => {
     if (typeof window === 'undefined') return [] as FamilyGoal[];
     return readJson(storageKeys.familyGoals, [] as FamilyGoal[]);
+  });
+
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() => {
+    if (typeof window === 'undefined') return [] as SavingsGoal[];
+    migrateOldRetirement();
+    return readJson<SavingsGoal[]>(storageKeys.savingsGoals, []);
   });
 
   const [suggestion, setSuggestion] = useState<SuggestedItem>(() => {
@@ -101,8 +134,14 @@ export default function SettingsPage() {
   const [memberAmount, setMemberAmount] = useState('');
   const [memberIncomeDate, setMemberIncomeDate] = useState('');
   const [memberIncomeAmount, setMemberIncomeAmount] = useState('');
-  const [goalTitle, setGoalTitle] = useState('');
-  const [goalTarget, setGoalTarget] = useState('');
+  const [familyGoalTitle, setFamilyGoalTitle] = useState('');
+  const [familyGoalTarget, setFamilyGoalTarget] = useState('');
+
+  const [goalName, setGoalName] = useState('');
+  const [goalAmount, setGoalAmount] = useState('');
+  const [goalAge, setGoalAge] = useState('');
+  const [goalSavings, setGoalSavings] = useState('');
+
   const [suggestionName, setSuggestionName] = useState(suggestion.name);
   const [suggestionPrice, setSuggestionPrice] = useState(String(suggestion.price));
   const [savingsInput, setSavingsInput] = useState(String(savings));
@@ -113,20 +152,22 @@ export default function SettingsPage() {
   useEffect(() => {
     setBudget(readNumberOrNull(storageKeys.budget));
     setSalaryDays(readNumberOrNull(storageKeys.salaryDays));
-    setRetirementAge(readNumberOrNull(storageKeys.retirementAge));
-    setRetirementIncome(readNumberOrNull(storageKeys.retirementIncome));
-    setRetirementSavings(readNumberOrNull(storageKeys.retirementSavings));
-    setRetirementTarget(readNumberOrNull(storageKeys.retirementTarget));
+    setUserAge(readNumberOrNull(storageKeys.userAge));
     setNotifications(readBoolean(storageKeys.notifications, true));
   }, []);
+
+  const handleSaveSavingsGoals = (newGoals: SavingsGoal[]) => {
+    setSavingsGoals(newGoals);
+    window.localStorage.setItem(storageKeys.savingsGoals, JSON.stringify(newGoals));
+  };
 
   const handleSaveMembers = (newMembers: FamilyMember[]) => {
     setMembers(newMembers);
     window.localStorage.setItem(storageKeys.familyMembers, JSON.stringify(newMembers));
   };
 
-  const handleSaveGoals = (newGoals: FamilyGoal[]) => {
-    setGoals(newGoals);
+  const handleSaveFamilyGoals = (newGoals: FamilyGoal[]) => {
+    setFamilyGoalsList(newGoals);
     window.localStorage.setItem(storageKeys.familyGoals, JSON.stringify(newGoals));
   };
 
@@ -145,25 +186,10 @@ export default function SettingsPage() {
     }
     window.localStorage.setItem(storageKeys.budget, String(budget));
     window.localStorage.setItem(storageKeys.salaryDays, String(salaryDays));
-    if (retirementAge !== null) {
-      window.localStorage.setItem(storageKeys.retirementAge, String(retirementAge));
+    if (userAge !== null) {
+      window.localStorage.setItem(storageKeys.userAge, String(userAge));
     } else {
-      window.localStorage.removeItem(storageKeys.retirementAge);
-    }
-    if (retirementIncome !== null) {
-      window.localStorage.setItem(storageKeys.retirementIncome, String(retirementIncome));
-    } else {
-      window.localStorage.removeItem(storageKeys.retirementIncome);
-    }
-    if (retirementSavings !== null) {
-      window.localStorage.setItem(storageKeys.retirementSavings, String(retirementSavings));
-    } else {
-      window.localStorage.removeItem(storageKeys.retirementSavings);
-    }
-    if (retirementTarget !== null) {
-      window.localStorage.setItem(storageKeys.retirementTarget, String(retirementTarget));
-    } else {
-      window.localStorage.removeItem(storageKeys.retirementTarget);
+      window.localStorage.removeItem(storageKeys.userAge);
     }
     window.localStorage.setItem(storageKeys.notifications, String(notifications));
     setMessage('Настройки сохранены.');
@@ -178,14 +204,39 @@ export default function SettingsPage() {
     window.localStorage.removeItem(storageKeys.budget);
     window.localStorage.removeItem(storageKeys.salaryDays);
     window.localStorage.removeItem(storageKeys.notifications);
+    window.localStorage.removeItem(storageKeys.userAge);
     setBudget(null);
     setSalaryDays(null);
+    setUserAge(null);
     setNotifications(true);
     setBudgetError(false);
     setSalaryDaysError(false);
     setMessage('Настройки сброшены. Заполните бюджет и дни до зарплаты.');
   };
 
+  const handleAddGoal = (e: FormEvent) => {
+    e.preventDefault();
+    const parsedAmount = Number(goalAmount);
+    const parsedAge = Number(goalAge);
+    const parsedSavings = Number(goalSavings);
+    if (!goalName.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !Number.isFinite(parsedAge) || parsedAge <= 0) return;
+    const next: SavingsGoal = {
+      id: `${Date.now()}-${goalName.trim()}`,
+      name: goalName.trim(),
+      targetAmount: parsedAmount,
+      targetAge: parsedAge,
+      currentSavings: Number.isFinite(parsedSavings) && parsedSavings > 0 ? parsedSavings : 0,
+    };
+    handleSaveSavingsGoals([...savingsGoals, next]);
+    setGoalName('');
+    setGoalAmount('');
+    setGoalAge('');
+    setGoalSavings('');
+  };
+
+  const handleRemoveGoal = (id: string) => handleSaveSavingsGoals(savingsGoals.filter(g => g.id !== id));
+
+  // Family handlers
   const handleAddMember = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(memberAmount);
@@ -212,21 +263,21 @@ export default function SettingsPage() {
 
   const handleRemoveMember = (id: string) => handleSaveMembers(members.filter(m => m.id !== id));
 
-  const handleAddGoal = (e: FormEvent) => {
+  const handleAddFamilyGoal = (e: FormEvent) => {
     e.preventDefault();
-    const parsed = Number(goalTarget);
-    if (!goalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
+    const parsed = Number(familyGoalTarget);
+    if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
     const next: FamilyGoal = {
-      id: `${Date.now()}-${goalTitle.trim()}`,
-      title: goalTitle.trim(),
+      id: `${Date.now()}-${familyGoalTitle.trim()}`,
+      title: familyGoalTitle.trim(),
       target: parsed,
     };
-    handleSaveGoals([...goals, next]);
-    setGoalTitle('');
-    setGoalTarget('');
+    handleSaveFamilyGoals([...familyGoalsList, next]);
+    setFamilyGoalTitle('');
+    setFamilyGoalTarget('');
   };
 
-  const handleRemoveGoal = (id: string) => handleSaveGoals(goals.filter(g => g.id !== id));
+  const handleRemoveFamilyGoal = (id: string) => handleSaveFamilyGoals(familyGoalsList.filter(g => g.id !== id));
 
   const handleSaveSuggestion = (e: FormEvent) => {
     e.preventDefault();
@@ -247,12 +298,12 @@ export default function SettingsPage() {
   };
 
   const totalFamily = useMemo(() => members.reduce((sum, member) => sum + member.contribute, 0), [members]);
-  const totalGoals = useMemo(() => goals.reduce((sum, goal) => sum + goal.target, 0), [goals]);
+  const totalGoals = useMemo(() => familyGoalsList.reduce((sum, goal) => sum + goal.target, 0), [familyGoalsList]);
   const familyProgress = totalGoals > 0 ? Math.min(100, Math.round((totalFamily / totalGoals) * 100)) : 0;
 
   const tabs: Array<{ key: SettingsTab; label: string }> = [
     { key: 'general', label: 'Основные' },
-    { key: 'retirement', label: 'Пенсия' },
+    { key: 'goals', label: 'Цели' },
     { key: 'family', label: 'Семья' },
     { key: 'extras', label: 'Дополнительно' },
   ];
@@ -319,6 +370,18 @@ export default function SettingsPage() {
               />
             </label>
 
+            <label>
+              Ваш возраст
+              <input
+                type="number"
+                value={userAge ?? ''}
+                onChange={e => setUserAge(e.target.value ? Number(e.target.value) : null)}
+                min={14}
+                max={100}
+                placeholder="Например, 30"
+              />
+            </label>
+
             <label className="switch-label">
               <span>Уведомления</span>
               <input type="checkbox" checked={notifications} onChange={e => setNotifications(e.target.checked)} />
@@ -331,68 +394,62 @@ export default function SettingsPage() {
               <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить по умолчанию</button>
             </div>
 
-            <div className="forecast-box" style={{ marginTop: 20 }}>
-              <p>Прогресс по семейным целям</p>
-              <strong>{familyProgress}%</strong>
-              <div className="bar-track" style={{ marginTop: 8 }}>
-                <span style={{ width: `${familyProgress}%` }} />
+            {userAge !== null && savingsGoals.length > 0 && (
+              <div className="forecast-box" style={{ marginTop: 20 }}>
+                <p>Всего целей: {savingsGoals.length}</p>
+                <small style={{ display: 'block', marginTop: 4 }}>
+                  {savingsGoals.map(g => {
+                    const yearsLeft = Math.max(1, g.targetAge - userAge);
+                    const monthly = Math.round((g.targetAmount - g.currentSavings) / (yearsLeft * 12));
+                    return `${g.name}: ${formatCurrency(monthly)}/мес`;
+                  }).join(' · ')}
+                </small>
               </div>
-              <small style={{ display: 'block', marginTop: 8 }}>{formatCurrency(totalFamily)} / {formatCurrency(totalGoals)}</small>
-            </div>
+            )}
           </form>
         </section>
       )}
 
-      {/* Retirement Tab */}
-      {activeTab === 'retirement' && (
-        <section className="card large" id="settings-panel-retirement" role="tabpanel">
-          <h4>Параметры пенсии</h4>
-          <form className="settings-form" onSubmit={handleSubmit} noValidate>
-            <label>
-              Возраст
-              <input
-                type="number"
-                value={retirementAge ?? ''}
-                onChange={e => setRetirementAge(e.target.value ? Number(e.target.value) : null)}
-                min={18}
-                placeholder="Укажите возраст"
-              />
-            </label>
-            <label>
-              Доход
-              <input
-                type="number"
-                value={retirementIncome ?? ''}
-                onChange={e => setRetirementIncome(e.target.value ? Number(e.target.value) : null)}
-                min={0}
-                placeholder="Ежемесячный доход"
-              />
-            </label>
-            <label>
-              Накопления для пенсии
-              <input
-                type="number"
-                value={retirementSavings ?? ''}
-                onChange={e => setRetirementSavings(e.target.value ? Number(e.target.value) : null)}
-                min={0}
-                placeholder="Текущие сбережения"
-              />
-            </label>
-            <label>
-              Планируемая пенсия
-              <input
-                type="number"
-                value={retirementTarget ?? ''}
-                onChange={e => setRetirementTarget(e.target.value ? Number(e.target.value) : null)}
-                min={0}
-                placeholder="Желаемая сумма"
-              />
-            </label>
-            {message && <div className="auth-success" role="status">{message}</div>}
-            <div className="settings-actions">
-              <button type="submit" className="primary-button">Сохранить параметры</button>
+      {/* Goals Tab (replaces retirement) */}
+      {activeTab === 'goals' && (
+        <section className="card large" id="settings-panel-goals" role="tabpanel">
+          <div className="settings-block">
+            <div className="settings-block-head">
+              <div>
+                <h4>Цели накоплений</h4>
+                <p>Добавьте цели: квартира, машина, пенсия, образование детей — любые.</p>
+              </div>
+              <span className="mini-pill">{savingsGoals.length} целей</span>
             </div>
-          </form>
+            <div className="settings-list">
+              {savingsGoals.length ? savingsGoals.map(goal => {
+                const age = userAge ?? 30;
+                const yearsLeft = Math.max(1, goal.targetAge - age);
+                const monthly = Math.round((goal.targetAmount - goal.currentSavings) / (yearsLeft * 12));
+                return (
+                  <div key={goal.id} className="settings-row">
+                    <div>
+                      <strong>{goal.name}</strong>
+                      <p>{formatCurrency(goal.targetAmount)} · к {goal.targetAge} годам · {formatCurrency(monthly)}/мес</p>
+                    </div>
+                    <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)} aria-label={`Удалить ${goal.name}`}>Удалить</button>
+                  </div>
+                );
+              }) : (
+                <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
+              )}
+            </div>
+            <form className="inline-form" onSubmit={handleAddGoal}>
+              <input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Название (Квартира, Пенсия...)" />
+              <input value={goalAmount} onChange={e => setGoalAmount(e.target.value)} placeholder="Сумма цели" type="number" />
+              <input value={goalAge} onChange={e => setGoalAge(e.target.value)} placeholder="Возраст достижения" type="number" />
+              <input value={goalSavings} onChange={e => setGoalSavings(e.target.value)} placeholder="Уже есть, ₽" type="number" />
+              <button type="submit">Добавить</button>
+            </form>
+            {userAge === null && (
+              <p className="settings-note">Укажите свой возраст в «Основных» настройках, чтобы рассчитать ежемесячный взнос.</p>
+            )}
+          </div>
         </section>
       )}
 
@@ -439,24 +496,24 @@ export default function SettingsPage() {
                 <h4>Семейные цели</h4>
                 <p>Создайте задачи и храните запланированные суммы.</p>
               </div>
-              <span className="mini-pill">{goals.length} целей</span>
+              <span className="mini-pill">{familyGoalsList.length} целей</span>
             </div>
             <div className="settings-list">
-              {goals.length ? goals.map(goal => (
+              {familyGoalsList.length ? familyGoalsList.map(goal => (
                 <div key={goal.id} className="settings-row">
                   <div>
                     <strong>{goal.title}</strong>
                     <p>Цель {goal.target.toLocaleString('ru-RU')} ₽</p>
                   </div>
-                  <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)} aria-label={`Удалить ${goal.title}`}>Удалить</button>
+                  <button type="button" className="text-button" onClick={() => handleRemoveFamilyGoal(goal.id)} aria-label={`Удалить ${goal.title}`}>Удалить</button>
                 </div>
               )) : (
                 <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
               )}
             </div>
-            <form className="inline-form" onSubmit={handleAddGoal}>
-              <input value={goalTitle} onChange={e => setGoalTitle(e.target.value)} placeholder="Название цели" />
-              <input value={goalTarget} onChange={e => setGoalTarget(e.target.value)} placeholder="Сумма цели" type="number" />
+            <form className="inline-form" onSubmit={handleAddFamilyGoal}>
+              <input value={familyGoalTitle} onChange={e => setFamilyGoalTitle(e.target.value)} placeholder="Название цели" />
+              <input value={familyGoalTarget} onChange={e => setFamilyGoalTarget(e.target.value)} placeholder="Сумма цели" type="number" />
               <button type="submit">Добавить цель</button>
             </form>
           </div>
