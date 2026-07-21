@@ -38,8 +38,8 @@
 }
 
 .theme-light {
-  color: #11213a;
-  background: #f4f7ff;
+  color: #0a1628;
+  background: #e8edf8;
 }
 
 * { box-sizing: border-box; }
@@ -59,9 +59,9 @@ body {
 
 .theme-light body {
   background:
-    radial-gradient(circle at 15% 20%, rgba(55, 199, 255, 0.16), transparent 28%),
-    radial-gradient(circle at 85% 15%, rgba(139, 109, 255, 0.14), transparent 24%),
-    linear-gradient(135deg, #f7faff 0%, #eef5ff 48%, #e9f0ff 100%);
+    radial-gradient(circle at 15% 20%, rgba(55, 199, 255, 0.2), transparent 28%),
+    radial-gradient(circle at 85% 15%, rgba(139, 109, 255, 0.18), transparent 24%),
+    linear-gradient(135deg, #eef3fd 0%, #e4ecfa 48%, #dde5f5 100%);
 }
 
 button, input, textarea, select { font: inherit; }
@@ -103,7 +103,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 }
 
 .theme-light .app-shell {
-  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(245, 248, 255, 0.98));
+  background: linear-gradient(135deg, rgba(242, 246, 255, 0.98), rgba(235, 241, 252, 0.98));
 }
 
 .app-shell::before {
@@ -169,7 +169,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 }
 
 .theme-light .sidebar {
-  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(240, 245, 255, 0.95));
+  background: linear-gradient(180deg, rgba(242, 246, 255, 0.97), rgba(232, 238, 250, 0.96));
 }
 
 .brand-block {
@@ -193,8 +193,8 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 
 .brand-title { font-weight: 700; margin: 0; }
 .brand-subtitle { color: #8ca1c0; font-size: var(--font-size-sm); margin: 2px 0 0; }
-.theme-light .brand-title { color: #1d2950; }
-.theme-light .brand-subtitle { color: #6b7a9a; }
+.theme-light .brand-title { color: #0d1a35; }
+.theme-light .brand-subtitle { color: #3a4d6e; }
 
 /* ── Nav Groups ── */
 .nav-list { display: grid; gap: 4px; }
@@ -208,7 +208,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   color: #6a7a9a;
   opacity: 0.7;
 }
-.theme-light .nav-group-label { color: #8a96b0; }
+.theme-light .nav-group-label { color: #4d6082; opacity: 1; }
 
 .nav-item {
   display: flex;
@@ -220,7 +220,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   text-decoration: none;
   transition: all var(--transition-fast);
 }
-.theme-light .nav-item { color: #33415f; }
+.theme-light .nav-item { color: #14223b; }
 .nav-item:hover, .nav-item.active {
   background: linear-gradient(135deg, rgba(55,199,255,0.22), rgba(139,109,255,0.25));
   color: white;
@@ -301,9 +301,9 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   padding: 10px 14px;
   border-radius: var(--radius-pill);
 }
-.theme-light .ghost-button { color: #24324f; background: rgba(255,255,255,0.9); }
-.theme-light .widget-tab { color: #24324f; }
-.theme-light .status-pill { color: #1d5ce1; background: rgba(55,199,255,0.12); }
+.theme-light .ghost-button { color: #0a1a30; background: rgba(255,255,255,0.92); }
+.theme-light .widget-tab { color: #0a1a30; }
+.theme-light .status-pill { color: #1a4ec0; background: rgba(55,199,255,0.18); }
 
 /* ── Page Content ── */
 .page-content { display: flex; flex-direction: column; gap: 20px; }
@@ -353,7 +353,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 }
 .theme-light .calendar-head input {
   background: rgba(255,255,255,0.95);
-  color: #1d3253;
+  color: #0c1e38;
 }
 .calendar-range {
   display: flex;
@@ -400,9 +400,9 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   backdrop-filter: blur(20px);
 }
 .theme-light .hero-panel, .theme-light .card, .theme-light .metric-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(244, 248, 255, 0.96));
-  color: #17304f;
-  box-shadow: 0 20px 55px rgba(18, 35, 65, 0.08);
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(242, 246, 255, 0.97));
+  color: #0a1a30;
+  box-shadow: 0 20px 55px rgba(18, 35, 65, 0.12);
 }
 
 .hero-panel:hover, .card:hover {
@@ -430,8 +430,9 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   box-shadow: 0 30px 90px rgba(0,0,0,0.24);
 }
 .theme-light .auth-card {
-  background: rgba(255,255,255,0.96);
-  border-color: rgba(32, 56, 88, 0.08);
+  background: rgba(255,255,255,0.97);
+  border-color: rgba(32, 56, 88, 0.15);
+  box-shadow: 0 30px 90px rgba(18, 35, 65, 0.12);
 }
 .auth-brand {
   display: flex;
@@ -447,14 +448,14 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   margin: 4px 0 0;
   color: rgba(255,255,255,0.68);
 }
-.theme-light .auth-brand p { color: #4f617d; }
+.theme-light .auth-brand p { color: #2a3d5e; }
 .auth-form label {
   display: block;
   margin-bottom: 16px;
   font-size: var(--font-size-base);
   color: rgba(255,255,255,0.78);
 }
-.theme-light .auth-form label { color: #3b4b6d; }
+.theme-light .auth-form label { color: #1a2d4f; }
 .auth-form input {
   width: 100%;
   margin-top: 8px;
@@ -466,9 +467,9 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .theme-light .auth-form input {
-  border-color: rgba(46, 70, 104, 0.16);
+  border-color: rgba(46, 70, 104, 0.22);
   background: rgba(255,255,255,0.98);
-  color: #1f3253;
+  color: #0c1e38;
 }
 .auth-form input:focus {
   outline: none;
@@ -517,7 +518,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   margin: 8px 0 24px;
   color: rgba(255,255,255,0.75);
 }
-.theme-light .auth-lead { color: #4f617d; }
+.theme-light .auth-lead { color: #2a3d5e; }
 .auth-error, .auth-success {
   padding: 12px 14px;
   border-radius: var(--radius-md);
@@ -539,7 +540,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   font-size: var(--font-size-base);
   text-align: center;
 }
-.theme-light .auth-footer { color: #5b6d8a; }
+.theme-light .auth-footer { color: #2a3d5e; }
 .auth-card a { color: #8dceff; }
 
 /* ── Settings ── */
@@ -558,7 +559,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   letter-spacing: 0.12em;
 }
 .theme-light .settings-form label,
-.theme-light .settings-form .switch-label { color: #3b4b6d; }
+.theme-light .settings-form .switch-label { color: #1a2d4f; }
 .settings-form input,
 .settings-form select,
 .assistant-form textarea {
@@ -574,9 +575,9 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 .theme-light .settings-form input,
 .theme-light .settings-form select,
 .theme-light .assistant-form textarea {
-  border-color: rgba(46, 70, 104, 0.16);
+  border-color: rgba(46, 70, 104, 0.22);
   background: rgba(255,255,255,0.98);
-  color: #1f3253;
+  color: #0c1e38;
 }
 .switch-label {
   display: flex;
@@ -610,7 +611,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   color: inherit;
   font-size: var(--font-size-base);
 }
-.theme-light .settings-tab { color: #3b4b6d; }
+.theme-light .settings-tab { color: #1a2d4f; }
 .settings-tab.active {
   background: linear-gradient(135deg, rgba(55,199,255,0.18), rgba(139,109,255,0.22));
   border-color: rgba(55,199,255,0.35);
@@ -693,7 +694,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   color: rgba(255,255,255,0.75);
   margin: 0;
 }
-.theme-light .assistant-intro { color: #4f617d; }
+.theme-light .assistant-intro { color: #2a3d5e; }
 .assistant-form {
   display: grid;
   gap: 14px;
@@ -767,7 +768,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 .card.large { padding: 24px; }
 .card h4 { margin: 0 0 10px; font-size: var(--font-size-md); }
 .card ul { margin: 8px 0 0 18px; color: #a8b7d4; }
-.theme-light .card ul, .theme-light .card p, .theme-light .card strong { color: #4d5c78; }
+.theme-light .card ul, .theme-light .card p, .theme-light .card strong { color: #253852; }
 .stack { display: grid; gap: 16px; }
 .inline-form, .chip-row, .input-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .inline-form input, .inline-form select, .input-grid input, textarea {
@@ -788,13 +789,13 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 .theme-light .inline-form input, .theme-light .inline-form select,
 .theme-light .input-grid input,
 .theme-light textarea {
-  border-color: rgba(46, 70, 104, 0.16);
+  border-color: rgba(46, 70, 104, 0.22);
   background: rgba(255,255,255,0.98);
-  color: #1f3253;
+  color: #0c1e38;
 }
 .theme-light .inline-form select option {
   background: #fff;
-  color: #1f3253;
+  color: #0c1e38;
 }
 
 .inline-form button, .chip, form button {
@@ -815,7 +816,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   color: #e7f3ff;
   border: 1px solid rgba(255,255,255,0.1);
 }
-.theme-light .chip { color: #24324f; }
+.theme-light .chip { color: #0a1a30; }
 .chip.active { background: linear-gradient(135deg, rgba(55,199,255,0.28), rgba(139,109,255,0.3)); }
 
 .forecast-box {
@@ -1058,8 +1059,8 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   font-size: var(--font-size-sm);
 }
 .theme-light .assistant-header span {
-  background: rgba(21, 52, 91, 0.1);
-  color: #1d3251;
+  background: rgba(21, 52, 91, 0.15);
+  color: #0a1a30;
 }
 .chip-row { flex-shrink: 0; }
 .chat-messages {
@@ -1080,7 +1081,7 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   font-size: var(--font-size-sm);
   padding: 60px 20px;
 }
-.theme-light .chat-empty { color: #4f617d; }
+.theme-light .chat-empty { color: #2a3d5e; }
 .chat-msg {
   padding: 12px 18px;
   border-radius: var(--radius-lg);
@@ -1101,8 +1102,8 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   border-bottom-left-radius: 4px;
 }
 .theme-light .chat-msg-assistant {
-  background: rgba(231, 240, 255, 0.7);
-  color: #1f3253;
+  background: rgba(220, 232, 250, 0.85);
+  color: #0a1a30;
 }
 .chat-msg-loading {
   align-self: flex-start;
@@ -1141,9 +1142,9 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
   outline: none;
 }
 .theme-light .chat-form input {
-  background: rgba(231, 240, 255, 0.5);
-  border-color: rgba(21, 52, 91, 0.15);
-  color: #1f3253;
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(21, 52, 91, 0.2);
+  color: #0c1e38;
 }
 .chat-form .primary-button {
   padding: 12px 24px;
