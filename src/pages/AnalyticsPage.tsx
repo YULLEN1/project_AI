@@ -9,6 +9,30 @@ type Purchase = {
   date: string;
 };
 
+type FamilyMember = {
+  id: string;
+  name: string;
+  role: string;
+  contribute: number;
+  color: string;
+};
+
+type FamilyGoal = {
+  id: string;
+  title: string;
+  target: number;
+};
+
+type SavingsGoal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetAge: number;
+  currentSavings: number;
+};
+
+type ForecastType = 'simple' | 'goals' | 'retirement';
+
 function readPurchases() {
   if (typeof window === 'undefined') return [] as Purchase[];
   const raw = window.localStorage.getItem('moneypilot-purchases');
@@ -78,11 +102,27 @@ function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
 
+function readJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return fallback;
+  try { return JSON.parse(raw) as T; }
+  catch { return fallback; }
+}
+
+function readNumber(key: string): number | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(key);
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export default function AnalyticsPage() {
   const [visible, setVisible] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [range, setRange] = useState<RangeKey>('week');
   const [selectedDate, setSelectedDate] = useState(getSavedSelectedDate());
+  const [forecastType, setForecastType] = useState<ForecastType>('simple');
 
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(true), 80);
@@ -125,6 +165,32 @@ export default function AnalyticsPage() {
         ? Math.round((filteredPurchases[filteredPurchases.length - 1].amount - filteredPurchases[0].amount) / filteredPurchases[0].amount * 100)
         : 0;
 
+    const savings = readNumber('moneypilot-savings') ?? 0;
+    const members = readJson<FamilyMember[]>('moneypilot-family-members', []);
+    const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
+    const userAge = readNumber('moneypilot-user-age');
+    const savingsGoals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
+
+    const daysInPeriod = range === 'today' ? 1 : range === 'week' ? 7 : 30;
+    const monthlyProjection = range === 'month' ? total : Math.round((total / Math.max(1, daysInPeriod)) * 30);
+    const simpleForecast = Math.round(monthlyProjection * 1.15);
+
+    const totalFamilyTarget = familyGoals.reduce((sum, g) => sum + g.target, 0);
+    const totalFamilyContributions = members.reduce((sum, m) => sum + m.contribute, 0);
+    const goalsProgress = totalFamilyTarget > 0 ? Math.round((totalFamilyContributions / totalFamilyTarget) * 100) : 0;
+    const goalsForecast = savings + monthlyProjection * 12;
+
+    let retirementForecast = 0;
+    let retirementMonthly = 0;
+    if (userAge && savingsGoals.length > 0) {
+      const totalRetirementTarget = savingsGoals.reduce((sum, g) => sum + g.targetAmount, 0);
+      const totalCurrentSavings = savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
+      const maxYearsLeft = Math.max(...savingsGoals.map(g => Math.max(1, g.targetAge - userAge)));
+      const remaining = Math.max(0, totalRetirementTarget - totalCurrentSavings);
+      retirementMonthly = Math.round(remaining / (maxYearsLeft * 12));
+      retirementForecast = totalCurrentSavings + retirementMonthly * 12;
+    }
+
     return {
       habits: sortedCategories.map(([name, amount], index) => ({
         name,
@@ -138,9 +204,15 @@ export default function AnalyticsPage() {
       })),
       total,
       trend,
-      forecast: Math.round(total * 1.15),
+      forecast: simpleForecast,
+      simpleForecast,
+      goalsForecast,
+      goalsProgress,
+      retirementForecast,
+      retirementMonthly,
+      monthlyProjection,
     };
-  }, [filteredPurchases]);
+  }, [filteredPurchases, range]);
 
   return (
     <div className={`page-grid ${visible ? 'visible' : ''}`}>
@@ -193,16 +265,80 @@ export default function AnalyticsPage() {
         </div>
         <div className="card large reveal-card">
           <h4>Финансовый прогноз</h4>
+          <div className="chip-row" style={{ marginBottom: 16 }}>
+            <button
+              className={`chip ${forecastType === 'simple' ? 'active' : ''}`}
+              onClick={() => setForecastType('simple')}
+            >
+              Простой
+            </button>
+            <button
+              className={`chip ${forecastType === 'goals' ? 'active' : ''}`}
+              onClick={() => setForecastType('goals')}
+            >
+              С целями
+            </button>
+            <button
+              className={`chip ${forecastType === 'retirement' ? 'active' : ''}`}
+              onClick={() => setForecastType('retirement')}
+            >
+              Пенсионный
+            </button>
+          </div>
           {analytics ? (
             <>
-              <div className="bars-stack">
-                {[...Array(6)].map((_, index) => (
-                  <div key={index} className="bar-column">
-                    <div className="bar-fill" style={{ height: `${30 + index * 10}%` }} />
+              {forecastType === 'simple' && (
+                <>
+                  <p>Прогноз на основе средних расходов:</p>
+                  <div className="forecast-box">
+                    <p>Через год</p>
+                    <strong>{formatCurrency(analytics.simpleForecast)}</strong>
+                    <span>ожидаемые расходы</span>
+                    <p style={{ marginTop: 8, color: '#84f4c0' }}>
+                      +{formatCurrency(analytics.simpleForecast - analytics.total)} к текущим
+                    </p>
                   </div>
-                ))}
-              </div>
-              <p>Через год: <strong>+{formatCurrency(analytics.forecast - analytics.total)}</strong></p>
+                  <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
+                    Средние расходы: {formatCurrency(analytics.monthlyProjection)}/мес
+                  </p>
+                </>
+              )}
+              {forecastType === 'goals' && (
+                <>
+                  <p>Прогноз накоплений с учётом семейных целей:</p>
+                  <div className="forecast-box">
+                    <p>Через год</p>
+                    <strong>{formatCurrency(analytics.goalsForecast)}</strong>
+                    <span>прогноз накоплений</span>
+                    <p style={{ marginTop: 8, color: '#84f4c0' }}>
+                      Прогресс по целям: {analytics.goalsProgress}%
+                    </p>
+                  </div>
+                  <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
+                    Откладывается: {formatCurrency(analytics.monthlyProjection)}/мес
+                  </p>
+                </>
+              )}
+              {forecastType === 'retirement' && (
+                <>
+                  <p>Пенсионный прогноз:</p>
+                  <div className="forecast-box">
+                    <p>Через год</p>
+                    <strong>{formatCurrency(analytics.retirementForecast)}</strong>
+                    <span>прогноз накоплений</span>
+                    {analytics.retirementMonthly > 0 && (
+                      <p style={{ marginTop: 8, color: '#84f4c0' }}>
+                        Нужно откладывать: {formatCurrency(analytics.retirementMonthly)}/мес
+                      </p>
+                    )}
+                  </div>
+                  <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
+                    {analytics.retirementMonthly > 0
+                      ? 'Расчёт на основе целей из раздела Пенсия'
+                      : 'Добавьте цели в раздел Пенсия для точного расчёта'}
+                  </p>
+                </>
+              )}
             </>
           ) : (
             <p>Пока нет прогноза — добавьте первые расходы.</p>
