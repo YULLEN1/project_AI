@@ -159,6 +159,8 @@ export default function DashboardPage() {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<CategoryKey>('Разное');
   const [date, setDate] = useState(getToday());
+  const [formError, setFormError] = useState('');
+  const [formSuccess, setFormSuccess] = useState('');
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
   const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
   const suggestion = getSavedSuggestion();
@@ -201,8 +203,13 @@ export default function DashboardPage() {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    setFormError('');
+    setFormSuccess('');
     const parsedAmount = Number(amount);
-    if (!title.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
+    if (!title.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setFormError('Укажите название покупки и сумму больше нуля.');
+      return;
+    }
 
     setPurchases(prev => [...prev, {
       title: title.trim(),
@@ -213,18 +220,26 @@ export default function DashboardPage() {
     setTitle('');
     setAmount('');
     setCategory('Разное');
+    setFormSuccess('Расход добавлен в выбранную дату.');
   };
 
 
   return (
     <div className="page-grid">
-      <section className="hero-panel">
+      <section className="hero-panel dashboard-decision">
         <div className="hero-copy">
-          <p className="eyebrow">Здравствуйте</p>
-          <h3>Настройте стартовые данные</h3>
-          <p>Установите бюджет и дни до зарплаты на странице настроек, чтобы расчёты были точными.</p>
+          <p className="eyebrow">Финансовый ориентир</p>
+          <h2>{baseBudget !== null && daysToSalary !== null ? 'Можно потратить сегодня' : 'Настройте финансовый план'}</h2>
+          {baseBudget !== null && daysToSalary !== null ? (
+            <>
+              <strong className="decision-amount">{formatCurrency(Math.round(dailyBudget))}</strong>
+              <p>До следующего дохода {daysToSalary} дн. В месячном лимите осталось {formatCurrency(Math.max(0, remainingBudget))}.</p>
+            </>
+          ) : (
+            <p>Укажите месячный лимит и дни до следующего дохода, чтобы получить безопасный дневной ориентир.</p>
+          )}
         </div>
-        <div className="hero-badge">✨ Все данные берутся из настроек</div>
+        <Link className="hero-action" to="/settings">{baseBudget === null || daysToSalary === null ? 'Настроить план' : 'Изменить план'}</Link>
       </section>
 
       <section className="widget-tabs" aria-label="Временные показатели">
@@ -239,10 +254,10 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      <section className="calendar-panel">
+      <section className="calendar-panel" aria-label="Период анализа">
         <div className="calendar-head">
-          <span>Календарь</span>
-          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+          <label htmlFor="analytics-date">Дата анализа</label>
+          <input id="analytics-date" type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
         </div>
         <div className="calendar-range">
           {rangeDates.map(day => (
@@ -261,7 +276,7 @@ export default function DashboardPage() {
 
       <section className="metrics-grid">
         <article className="metric-card primary">
-          <span>До зарплаты</span>
+          <span>До следующего дохода</span>
           <strong>{daysToSalary !== null ? `${daysToSalary} дней` : 'Не задано'}</strong>
           <div className="spark-line">
             <span style={{ width: '70%' }} />
@@ -270,7 +285,7 @@ export default function DashboardPage() {
           </div>
         </article>
         <article className="metric-card">
-          <span>Можно тратить сегодня</span>
+          <span>Дневной ориентир</span>
           <strong>{baseBudget !== null && daysToSalary !== null ? formatCurrency(Math.round(dailyBudget)) : 'Настройте данные'}</strong>
           {baseBudget !== null && filteredPurchases.length > 0 ? (
             <div className="mini-pill">
@@ -321,13 +336,13 @@ export default function DashboardPage() {
       </section>
 
       <section className="content-grid">
-        <div className="card large chart-card">
-          <div className="card-head">
-            <h4>Динамика баланса</h4>
+          <div className="card large chart-card">
+            <div className="card-head">
+            <h2>Расходы по дням</h2>
             <span>{range === 'today' ? 'Сегодня' : range === 'week' ? 'Неделя' : 'Месяц'}</span>
           </div>
           <div className="chart-wrapper">
-            <svg viewBox="0 0 320 140" className="real-chart" role="img" aria-label="График баланса">
+            <svg viewBox="0 0 320 140" className="real-chart" role="img" aria-label="График расходов по дням">
               <path d={chartPath} />
               {chartPoints.map((point, index) => {
                 const x = 10 + index * (300 / Math.max(chartPoints.length - 1, 1));
@@ -337,6 +352,10 @@ export default function DashboardPage() {
                 return <circle key={point.date} cx={x} cy={y} r={4} />;
               })}
             </svg>
+            <table className="sr-only">
+              <caption>Расходы по дням за выбранный период</caption>
+              <tbody>{chartPoints.map(point => <tr key={point.date}><th scope="row">{formatDateLabel(point.date)}</th><td>{formatCurrency(point.total)}</td></tr>)}</tbody>
+            </table>
             <div className="chart-tooltip">
               {baseBudget !== null && daysToSalary !== null
                 ? (filteredPurchases.length
@@ -348,7 +367,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="card large">
-          <h4>ИИ-сообщение</h4>
+          <h2>Добавить расход</h2>
           <p>
             {lastPurchase
               ? `${lastPurchase.title} — покупка №${filteredPurchases.length} за период. Средний чек — ${formatCurrency(averagePurchase)}.`
@@ -359,15 +378,17 @@ export default function DashboardPage() {
               ? <>Если сегодня не покупать ничего лишнего, к концу периода останется <strong>{formatCurrency(Math.max(0, remainingBudget))}</strong>.</>
               : 'Установите бюджет и дни до зарплаты в настройках.'}
           </p>
-          <form className="inline-form" onSubmit={handleSubmit}>
-            <input value={title} onChange={e => { setTitle(e.target.value); setCategory(detectCategory(e.target.value)); }} placeholder="Что купили?" />
-            <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма" type="number" />
-            <select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
+          <form className="inline-form" onSubmit={handleSubmit} noValidate>
+            <label><span className="sr-only">Название покупки</span><input aria-invalid={Boolean(formError)} value={title} onChange={e => { setTitle(e.target.value); setCategory(detectCategory(e.target.value)); }} placeholder="Что купили?" /></label>
+            <label><span className="sr-only">Сумма в рублях</span><input aria-invalid={Boolean(formError)} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма, ₽" type="number" min="1" inputMode="decimal" /></label>
+            <label><span className="sr-only">Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </select></label>
+            <label><span className="sr-only">Дата расхода</span><input aria-label="Дата расхода" type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
             <button type="submit">Добавить</button>
           </form>
+          {formError && <p className="form-feedback error" role="alert">{formError}</p>}
+          {formSuccess && <p className="form-feedback success" role="status">{formSuccess}</p>}
         </div>
 
         <div className="stack">

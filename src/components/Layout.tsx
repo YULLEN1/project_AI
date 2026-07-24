@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
@@ -14,7 +14,7 @@ const navGroups = [
     label: 'Планирование',
     items: [
       { to: '/goals', label: 'Планы', icon: '◍' },
-      { to: '/retirement', label: 'Накопления', icon: '◎' },
+      { to: '/retirement', label: 'Цели накоплений', icon: '◎' },
       { to: '/family', label: 'Семья', icon: '⬢' },
     ],
   },
@@ -36,6 +36,8 @@ export default function Layout() {
     return saved === 'light' ? 'light' : 'dark';
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     window.localStorage.setItem('moneypilot-theme', theme);
@@ -44,6 +46,33 @@ export default function Layout() {
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSidebarOpen(false);
+      if (event.key === 'Tab' && sidebarRef.current) {
+        const focusable = Array.from(sidebarRef.current.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), [tabindex]:not([tabindex="-1"])'));
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    sidebarRef.current?.querySelector<HTMLElement>('a[href]')?.focus();
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (!sidebarOpen) menuButtonRef.current?.focus();
+  }, [sidebarOpen]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -64,7 +93,7 @@ export default function Layout() {
 
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
-      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`} aria-label="Основная навигация">
+      <aside ref={sidebarRef} id="sidebar" className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`} aria-label="Основная навигация">
         <div className="brand-block">
           <div className="brand-mark" aria-hidden="true">MP</div>
           <div>
@@ -92,15 +121,11 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="sidebar-card" aria-label="Премиум-функции">
-          <p>Премиум</p>
-          <strong>Больше сценариев</strong>
-          <span>Прогнозы на 1, 3, 5 лет и семейное планирование.</span>
-        </div>
       </aside>
 
-      <main className="main-panel" id="main-content" role="main">
+      <main className="main-panel" id="main-content" role="main" aria-hidden={sidebarOpen || undefined}>
         <button
+          ref={menuButtonRef}
           className="hamburger"
           onClick={() => setSidebarOpen(!sidebarOpen)}
           aria-label={sidebarOpen ? 'Закрыть меню' : 'Открыть меню'}
@@ -112,16 +137,10 @@ export default function Layout() {
           <span />
         </button>
 
-        <div className="quick-panel" aria-label="Быстрые действия">
-          <div className="quick-item"><span aria-hidden="true">⚡</span> Быстрое действие</div>
-          <div className="quick-item"><span aria-hidden="true">🔔</span> 3 новых уведомления</div>
-          <div className="quick-item"><span aria-hidden="true">🎯</span> Цель: отпуск</div>
-        </div>
-
         <header className="topbar">
           <div>
             <p className="eyebrow">Сегодня</p>
-            <h2>Ваш финансовый компас в одном окне</h2>
+            <h1>{currentPageLabel}</h1>
           </div>
           <div className="topbar-actions">
             <div className="status-pill" aria-live="polite">{currentPageLabel}</div>

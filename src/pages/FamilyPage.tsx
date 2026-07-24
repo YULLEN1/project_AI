@@ -63,17 +63,24 @@ export default function FamilyPage() {
     return () => window.removeEventListener('focus', refresh);
   }, []);
 
-  const totalContributions = useMemo(
-    () => members.reduce((sum, member) => sum + member.contribute, 0),
+  const familyIncome = useMemo(
+    () => members.filter(member => member.role === 'Доход').reduce((sum, member) => sum + member.contribute, 0),
     [members],
   );
+
+  const familyExpenses = useMemo(
+    () => members.filter(member => member.role === 'Расход').reduce((sum, member) => sum + member.contribute, 0),
+    [members],
+  );
+
+  const availableBudget = familyIncome - familyExpenses;
 
   const totalTarget = useMemo(
     () => goals.reduce((sum, goal) => sum + goal.target, 0),
     [goals],
   );
 
-  const progress = totalTarget > 0 ? Math.min(100, Math.round((totalContributions / totalTarget) * 100)) : 0;
+  const progress = totalTarget > 0 ? Math.min(100, Math.round((Math.max(0, availableBudget) / totalTarget) * 100)) : 0;
 
   return (
     <div className="page-grid">
@@ -87,9 +94,10 @@ export default function FamilyPage() {
 
       <section className="content-grid">
         <div className="card large">
-          <h4>Общий бюджет семьи</h4>
-          <p>Доступно: <strong>{formatCurrency(totalContributions)}</strong></p>
-          <p>Осталось до цели: <strong>{formatCurrency(Math.max(0, totalTarget - totalContributions))}</strong></p>
+          <h2>Общий бюджет семьи</h2>
+          <p>Доходы: <strong>{formatCurrency(familyIncome)}</strong> · обязательные расходы: <strong>{formatCurrency(familyExpenses)}</strong></p>
+          <p>Доступно: <strong>{formatCurrency(availableBudget)}</strong></p>
+          <p>Осталось до цели: <strong>{formatCurrency(Math.max(0, totalTarget - Math.max(0, availableBudget)))}</strong></p>
           <div className="forecast-box" style={{ marginTop: 16 }}>
             <p>Прогресс по целям</p>
             <strong>{progress}%</strong>
@@ -122,7 +130,7 @@ export default function FamilyPage() {
         </div>
 
         <div className="card large">
-          <h4>Семейные цели</h4>
+            <h2>Семейные цели</h2>
           {goals.length ? (
             <ul className="goal-list">
               {goals.map(goal => (

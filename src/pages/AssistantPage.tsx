@@ -46,6 +46,7 @@ export default function AssistantPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [consent, setConsent] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('moneypilot-ai-consent') === 'true');
   const listRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
@@ -55,6 +56,10 @@ export default function AssistantPage() {
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
+    if (!consent) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Перед отправкой вопроса подтвердите передачу выбранных финансовых данных.' }]);
+      return;
+    }
     setLoading(true);
     setInput('');
 
@@ -96,22 +101,33 @@ export default function AssistantPage() {
     send(input.trim());
   };
 
+  const handleConsent = (checked: boolean) => {
+    setConsent(checked);
+    window.localStorage.setItem('moneypilot-ai-consent', String(checked));
+  };
+
   return (
     <div className="page-grid assistant-page-layout">
       <section className="hero-panel compact">
         <div>
           <p className="eyebrow">ИИ-консультант</p>
-          <h3>Финансовый агент</h3>
-          <p>Ваши доходы, расходы и цели передаются агенту автоматически. Просто задайте вопрос.</p>
+          <h2>Финансовый агент</h2>
+          <p>Вы сами решаете, можно ли использовать данные приложения для ответа. Рекомендации носят справочный характер и не являются инвестиционной консультацией.</p>
         </div>
       </section>
 
       <section className="content-grid">
         <div className="card assistant-panel">
           <div className="assistant-header">
-            <h4>Чат с агентом</h4>
+            <h2>Чат с агентом</h2>
             <span>AI</span>
           </div>
+
+          <label className="ai-consent">
+            <input type="checkbox" checked={consent} onChange={e => handleConsent(e.target.checked)} />
+            <span>Разрешаю передавать агенту лимит, доход, расходы, накопления и цели для персонального ответа.</span>
+          </label>
+          <p className="settings-note">Данные используются только для текущего запроса. Отключите согласие, чтобы остановить передачу.</p>
 
           <div className="chip-row">
             {prompts.map(item => (
@@ -124,7 +140,7 @@ export default function AssistantPage() {
           <div className="chat-messages" ref={listRef}>
             {messages.length === 0 && (
               <div className="chat-empty">
-                <p>Задайте вопрос или выберите подсказку. Данные из приложения передаются автоматически.</p>
+                <p>Задайте вопрос или выберите подсказку. Перед отправкой подтвердите состав финансового контекста.</p>
               </div>
             )}
             {messages.map((msg, i) => (
@@ -144,6 +160,7 @@ export default function AssistantPage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Напишите вопрос..."
+              aria-label="Вопрос финансовому агенту"
               disabled={loading}
             />
             <button type="submit" className="primary-button" disabled={loading || !input.trim()}>

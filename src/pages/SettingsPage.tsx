@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 
 const storageKeys = {
   budget: 'moneypilot-budget',
+  income: 'moneypilot-income',
   salaryDays: 'moneypilot-daysToSalary',
   notifications: 'moneypilot-notifications',
   purchases: 'moneypilot-purchases',
@@ -96,6 +97,7 @@ function migrateOldRetirement() {
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [budget, setBudget] = useState<number | null>(null);
+  const [income, setIncome] = useState<number | null>(null);
   const [salaryDays, setSalaryDays] = useState<number | null>(null);
   const [userAge, setUserAge] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(true);
@@ -151,6 +153,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setBudget(readNumberOrNull(storageKeys.budget));
+    setIncome(readNumberOrNull(storageKeys.income));
     setSalaryDays(readNumberOrNull(storageKeys.salaryDays));
     setUserAge(readNumberOrNull(storageKeys.userAge));
     setNotifications(readBoolean(storageKeys.notifications, true));
@@ -185,6 +188,8 @@ export default function SettingsPage() {
       return;
     }
     window.localStorage.setItem(storageKeys.budget, String(budget));
+    if (income !== null) window.localStorage.setItem(storageKeys.income, String(income));
+    else window.localStorage.removeItem(storageKeys.income);
     window.localStorage.setItem(storageKeys.salaryDays, String(salaryDays));
     if (userAge !== null) {
       window.localStorage.setItem(storageKeys.userAge, String(userAge));
@@ -202,10 +207,12 @@ export default function SettingsPage() {
 
   const resetDefaults = () => {
     window.localStorage.removeItem(storageKeys.budget);
+    window.localStorage.removeItem(storageKeys.income);
     window.localStorage.removeItem(storageKeys.salaryDays);
     window.localStorage.removeItem(storageKeys.notifications);
     window.localStorage.removeItem(storageKeys.userAge);
     setBudget(null);
+    setIncome(null);
     setSalaryDays(null);
     setUserAge(null);
     setNotifications(true);
@@ -219,7 +226,10 @@ export default function SettingsPage() {
     const parsedAmount = Number(goalAmount);
     const parsedAge = Number(goalAge);
     const parsedSavings = Number(goalSavings);
-    if (!goalName.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !Number.isFinite(parsedAge) || parsedAge <= 0) return;
+    if (!goalName.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !Number.isFinite(parsedAge) || parsedAge <= 0) {
+      setMessage('Для цели укажите название, сумму и возраст достижения.');
+      return;
+    }
     const next: SavingsGoal = {
       id: `${Date.now()}-${goalName.trim()}`,
       name: goalName.trim(),
@@ -234,13 +244,18 @@ export default function SettingsPage() {
     setGoalSavings('');
   };
 
-  const handleRemoveGoal = (id: string) => handleSaveSavingsGoals(savingsGoals.filter(g => g.id !== id));
+  const handleRemoveGoal = (id: string) => {
+    if (window.confirm('Удалить эту цель накоплений?')) handleSaveSavingsGoals(savingsGoals.filter(g => g.id !== id));
+  };
 
   // Family handlers
   const handleAddMember = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(memberAmount);
-    if (!memberName.trim() || !memberRole.trim() || !Number.isFinite(parsed) || parsed < 0) return;
+    if (!memberName.trim() || !Number.isFinite(parsed) || parsed < 0) {
+      setMessage('Для участника укажите имя и сумму.');
+      return;
+    }
     const next: FamilyMember = {
       id: `${Date.now()}-${memberName.trim()}`,
       name: memberName.trim(),
@@ -261,12 +276,17 @@ export default function SettingsPage() {
     setMemberIncomeAmount('');
   };
 
-  const handleRemoveMember = (id: string) => handleSaveMembers(members.filter(m => m.id !== id));
+  const handleRemoveMember = (id: string) => {
+    if (window.confirm('Удалить участника семьи?')) handleSaveMembers(members.filter(m => m.id !== id));
+  };
 
   const handleAddFamilyGoal = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(familyGoalTarget);
-    if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
+    if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0) {
+      setMessage('Для семейной цели укажите название и сумму.');
+      return;
+    }
     const next: FamilyGoal = {
       id: `${Date.now()}-${familyGoalTitle.trim()}`,
       title: familyGoalTitle.trim(),
@@ -277,12 +297,17 @@ export default function SettingsPage() {
     setFamilyGoalTarget('');
   };
 
-  const handleRemoveFamilyGoal = (id: string) => handleSaveFamilyGoals(familyGoalsList.filter(g => g.id !== id));
+  const handleRemoveFamilyGoal = (id: string) => {
+    if (window.confirm('Удалить семейную цель?')) handleSaveFamilyGoals(familyGoalsList.filter(g => g.id !== id));
+  };
 
   const handleSaveSuggestion = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(suggestionPrice);
-    if (!suggestionName.trim() || !Number.isFinite(parsed) || parsed <= 0) return;
+    if (!suggestionName.trim() || !Number.isFinite(parsed) || parsed <= 0) {
+      setMessage('Укажите название товара и цену больше нуля.');
+      return;
+    }
     setSuggestion({ name: suggestionName.trim(), price: parsed });
     window.localStorage.setItem(storageKeys.suggestedItem, JSON.stringify({ name: suggestionName.trim(), price: parsed }));
     setMessage('Предложение сохранено.');
@@ -291,7 +316,10 @@ export default function SettingsPage() {
   const handleSaveSavings = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(savingsInput);
-    if (!Number.isFinite(parsed) || parsed < 0) return;
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setMessage('Введите корректную сумму накоплений.');
+      return;
+    }
     setSavings(parsed);
     window.localStorage.setItem(storageKeys.savings, String(parsed));
     setMessage('Накопления сохранены.');
@@ -335,7 +363,7 @@ export default function SettingsPage() {
           <h4>Основные настройки</h4>
           <form className="settings-form" onSubmit={handleSubmit} noValidate>
             <label>
-              Месячный бюджет <span style={{ color: 'var(--color-error)' }}>*</span>
+              Месячный лимит расходов <span style={{ color: 'var(--color-error)' }}>*</span>
               <input
                 type="number"
                 value={budget ?? ''}
@@ -344,14 +372,27 @@ export default function SettingsPage() {
                   setBudgetError(false);
                 }}
                 min={1}
-                placeholder="Например, 80000"
+                placeholder="Например, 80000 ₽"
                 className={budgetError ? 'input-error' : ''}
                 required
               />
             </label>
 
             <label>
-              Дней до зарплаты <span style={{ color: 'var(--color-error)' }}>*</span>
+              Месячный доход
+              <input
+                type="number"
+                value={income ?? ''}
+                onChange={e => setIncome(e.target.value ? Number(e.target.value) : null)}
+                min={1}
+                placeholder="Необязательно, например 120000 ₽"
+                inputMode="decimal"
+              />
+              <small className="settings-note">Доход нужен для сценариев. Лимит расходов используется для дневного ориентира.</small>
+            </label>
+
+            <label>
+              Дней до следующего дохода <span style={{ color: 'var(--color-error)' }}>*</span>
               <input
                 type="number"
                 value={salaryDays ?? ''}
@@ -436,10 +477,10 @@ export default function SettingsPage() {
               )}
             </div>
             <form className="inline-form" onSubmit={handleAddGoal}>
-              <input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Название (Квартира, Пенсия...)" />
-              <input value={goalAmount} onChange={e => setGoalAmount(e.target.value)} placeholder="Сумма цели" type="number" />
-              <input value={goalAge} onChange={e => setGoalAge(e.target.value)} placeholder="Возраст достижения" type="number" />
-              <input value={goalSavings} onChange={e => setGoalSavings(e.target.value)} placeholder="Уже есть, ₽" type="number" />
+              <label><span className="sr-only">Название цели</span><input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Название (Квартира, Пенсия...)" /></label>
+              <label><span className="sr-only">Сумма цели</span><input value={goalAmount} onChange={e => setGoalAmount(e.target.value)} placeholder="Сумма цели, ₽" type="number" inputMode="decimal" /></label>
+              <label><span className="sr-only">Возраст достижения цели</span><input value={goalAge} onChange={e => setGoalAge(e.target.value)} placeholder="Возраст достижения" type="number" /></label>
+              <label><span className="sr-only">Текущие накопления</span><input value={goalSavings} onChange={e => setGoalSavings(e.target.value)} placeholder="Уже есть, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить</button>
             </form>
             {userAge === null && (
@@ -477,11 +518,11 @@ export default function SettingsPage() {
               )}
             </div>
             <form className="inline-form" onSubmit={handleAddMember}>
-              <input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" />
-              <input value={memberRole} onChange={e => setMemberRole(e.target.value)} placeholder="Роль (Доход/Расход)" />
-              <input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Сумма" type="number" />
-              <input value={memberIncomeDate} onChange={e => setMemberIncomeDate(e.target.value)} type="date" title="Дата следующего дохода" />
-              <input value={memberIncomeAmount} onChange={e => setMemberIncomeAmount(e.target.value)} placeholder="Доход, ₽" type="number" />
+              <label><span className="sr-only">Имя участника</span><input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" /></label>
+              <label><span className="sr-only">Тип суммы</span><select value={memberRole} onChange={e => setMemberRole(e.target.value)}><option value="Доход">Доход</option><option value="Расход">Обязательный расход</option></select></label>
+              <label><span className="sr-only">Сумма</span><input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Сумма, ₽" type="number" inputMode="decimal" /></label>
+              <label><span className="sr-only">Дата следующего дохода</span><input value={memberIncomeDate} onChange={e => setMemberIncomeDate(e.target.value)} type="date" /></label>
+              <label><span className="sr-only">Сумма следующего дохода</span><input value={memberIncomeAmount} onChange={e => setMemberIncomeAmount(e.target.value)} placeholder="Доход, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить</button>
             </form>
           </div>

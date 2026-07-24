@@ -136,7 +136,7 @@ function ForecastChart({ points, label }: { points: ForecastPoint[]; label: stri
   const maxValue = Math.max(...points.map(point => point.value), 1);
 
   return (
-    <div className="forecast-chart" role="img" aria-label={label}>
+      <div className="forecast-chart" role="img" aria-label={label}>
       <svg viewBox="0 0 300 132" preserveAspectRatio="none">
         <path className="forecast-grid-line" d="M18 108 H282 M18 67 H282 M18 26 H282" />
         <path className="forecast-line" d={path} />
@@ -149,6 +149,10 @@ function ForecastChart({ points, label }: { points: ForecastPoint[]; label: stri
       <div className="forecast-chart-labels">
         {points.map(point => <span key={point.year}>{point.year} г.</span>)}
       </div>
+      <table className="sr-only">
+        <caption>{label}</caption>
+        <tbody>{points.map(point => <tr key={point.year}><th scope="row">Через {point.year} г.</th><td>{formatCurrency(point.value)}</td></tr>)}</tbody>
+      </table>
     </div>
   );
 }
@@ -224,8 +228,8 @@ export default function AnalyticsPage() {
     }));
 
     const totalFamilyTarget = familyGoals.reduce((sum, g) => sum + g.target, 0);
-    const totalFamilyContributions = members.reduce((sum, m) => sum + m.contribute, 0);
-    const currentGoalSavings = savings + totalFamilyContributions;
+    const familyAvailable = members.reduce((sum, member) => sum + (member.role === 'Расход' ? -member.contribute : member.contribute), 0);
+    const currentGoalSavings = savings + Math.max(0, familyAvailable);
     const monthlySavings = Math.max(0, budget - monthlyExpenses);
     const goalsForecast = currentGoalSavings + monthlySavings * 12;
     const goalsProgress = totalFamilyTarget > 0
@@ -328,7 +332,7 @@ export default function AnalyticsPage() {
           <h4>Тренд расходов</h4>
           {analytics ? (
             <>
-              <svg viewBox="0 0 300 120" className="line-chart" aria-label="line chart">
+              <svg viewBox="0 0 300 120" className="line-chart" role="img" aria-label="Тренд расходов за выбранный период">
                 <path d={analytics.expenseChartPath} />
               </svg>
               <p>За выбранный период расходы {analytics.trend >= 0 ? 'увеличились' : 'уменьшились'} на <strong>{Math.abs(analytics.trend)}%</strong>.</p>
@@ -418,7 +422,7 @@ export default function AnalyticsPage() {
                   <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
                     {analytics.retirementMonthly !== null
                       ? 'Ежемесячный взнос рассчитан отдельно для каждой цели с её сроком.'
-                      : 'Добавьте цели в раздел Пенсия для точного расчёта'}
+                      : 'Добавьте цели накоплений и укажите возраст для точного расчёта'}
                   </p>
                   {analytics.retirementForecastPoints.length > 0 && (
                     <ForecastChart points={analytics.retirementForecastPoints} label="Прогноз накоплений по целям на пять лет" />

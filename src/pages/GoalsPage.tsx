@@ -72,7 +72,7 @@ export default function GoalsPage() {
 
   const data = useMemo(() => {
     const budget = readNumber('moneypilot-budget') ?? 0;
-    const salaryDays = readNumber('moneypilot-daysToSalary') ?? 30;
+    const income = readNumber('moneypilot-income');
     const savings = readNumber('moneypilot-savings') ?? 0;
     const purchases = readJson<Purchase[]>('moneypilot-purchases', []);
     const suggestedItem = readJson<{ name: string; price: number }>('moneypilot-suggestedItem', { name: '', price: 0 });
@@ -82,10 +82,8 @@ export default function GoalsPage() {
     const daysPassed = monthDates.filter(d => d <= today).length || 1;
     const monthPurchases = purchases.filter(p => monthDates.includes(p.date));
     const totalSpent = monthPurchases.reduce((sum, p) => sum + p.amount, 0);
-    const daysLeft = Math.max(0, salaryDays - daysPassed);
-
     const avgDailySpend = daysPassed > 0 ? totalSpent / daysPassed : 0;
-    const projectedMonthEnd = avgDailySpend * salaryDays;
+    const projectedMonthEnd = avgDailySpend * monthDates.length;
     const currentMonthlySavings = Math.max(0, budget - projectedMonthEnd);
 
     const cafeKeywords = ['кафе', 'кофе', 'кофейн', 'еда', 'ресторан', 'доставка', 'обед', 'ужин', 'завтрак'];
@@ -101,20 +99,19 @@ export default function GoalsPage() {
 
     return {
       budget,
-      salaryDays,
+      income,
       savings,
       totalSpent,
       currentMonthlySavings,
       cafeTotal,
       subscriptionTotal,
-      daysLeft,
       projectedMonthEnd,
       suggestedItem,
     };
   }, [tick]);
 
   const scenarios: ScenarioResult[] = useMemo(() => {
-    const { budget, cafeTotal, subscriptionTotal } = data;
+    const { income, cafeTotal, subscriptionTotal } = data;
 
     const cafeDelta = Math.round(cafeTotal * 0.3);
     const subDelta = subscriptionTotal;
@@ -145,8 +142,10 @@ export default function GoalsPage() {
       {
         key: 'income',
         label: 'Увеличить доход на 15%',
-        monthlyDelta: Math.round(budget * 0.15),
-        description: `Дополнительно ${formatCurrency(Math.round(budget * 0.15))}/мес к бюджету.`,
+        monthlyDelta: income ? Math.round(income * 0.15) : 0,
+        description: income
+          ? `Дополнительно ${formatCurrency(Math.round(income * 0.15))}/мес к текущему доходу.`
+          : 'Укажите месячный доход в настройках, чтобы рассчитать этот сценарий.',
       },
     ];
   }, [data]);
