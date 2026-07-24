@@ -4,8 +4,10 @@ import { Link } from 'react-router-dom';
 type SavingsGoal = {
   id: string;
   name: string;
+  type?: string;
   targetAmount: number;
-  targetAge: number;
+  targetDate?: string;
+  targetAge?: number;
   currentSavings: number;
 };
 
@@ -28,45 +30,35 @@ function readNumber(key: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function getMonthsUntil(targetDate?: string, targetAge?: number, userAge?: number | null) {
+  if (targetDate) {
+    const now = new Date();
+    const target = new Date(`${targetDate}T00:00:00`);
+    return Math.max(1, (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth());
+  }
+  if (targetAge && userAge) return Math.max(1, (targetAge - userAge) * 12);
+  return null;
+}
+
+function formatDeadline(goal: SavingsGoal) {
+  if (goal.targetDate) return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(`${goal.targetDate}T00:00:00`));
+  if (goal.targetAge) return `к ${goal.targetAge} годам`;
+  return 'срок не указан';
+}
+
 export default function RetirementPage() {
   const userAge = readNumber('moneypilot-user-age');
   const goals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
 
-  const calculated = useMemo(() => {
-    if (!userAge || goals.length === 0) return null;
-    return goals.map(goal => {
-      const yearsLeft = Math.max(1, goal.targetAge - userAge);
-      const monthsLeft = yearsLeft * 12;
-      const remaining = Math.max(0, goal.targetAmount - goal.currentSavings);
-      const monthly = Math.round(remaining / monthsLeft);
-      const progress = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentSavings / goal.targetAmount) * 100)) : 0;
-      return { ...goal, yearsLeft, monthsLeft, remaining, monthly, progress };
-    });
-  }, [userAge, goals]);
+  const calculated = useMemo(() => goals.map(goal => {
+    const monthsLeft = getMonthsUntil(goal.targetDate, goal.targetAge, userAge);
+    const remaining = Math.max(0, goal.targetAmount - goal.currentSavings);
+    const monthly = monthsLeft ? Math.ceil(remaining / monthsLeft) : null;
+    const progress = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentSavings / goal.targetAmount) * 100)) : 0;
+    return { ...goal, monthsLeft, remaining, monthly, progress };
+  }), [goals, userAge]);
 
-  const totalMonthly = useMemo(() => {
-    if (!calculated) return 0;
-    return calculated.reduce((s, g) => s + g.monthly, 0);
-  }, [calculated]);
-
-  if (!userAge) {
-    return (
-      <div className="page-grid">
-        <section className="hero-panel compact">
-          <div>
-            <p className="eyebrow">Цели накоплений</p>
-            <h3>Планируйте крупные покупки</h3>
-            <p>Квартира, машина, пенсия, образование детей — любые цели.</p>
-          </div>
-        </section>
-        <div className="card large">
-          <div className="empty-cell">
-            <p>Укажите свой возраст в <Link to="/settings">Настройках → Основные</Link>, чтобы увидеть расчёты.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const totalMonthly = calculated.reduce((sum, goal) => sum + (goal.monthly ?? 0), 0);
 
   if (goals.length === 0) {
     return (
@@ -74,15 +66,12 @@ export default function RetirementPage() {
         <section className="hero-panel compact">
           <div>
             <p className="eyebrow">Цели накоплений</p>
-            <h3>Планируйте крупные покупки</h3>
-            <p>Добавьте первую цель в <Link to="/settings">Настройках → Цели</Link>.</p>
+            <h2>Планируйте то, что важно вам</h2>
+            <p>Путешествие, резерв, квартира, образование или пенсия - каждая цель получает отдельный план.</p>
           </div>
+          <Link className="hero-action" to="/settings">Добавить цель</Link>
         </section>
-        <div className="card large">
-          <div className="empty-cell">
-            <p>Добавьте цель в <Link to="/settings">Настройках</Link>, чтобы увидеть план накоплений.</p>
-          </div>
-        </div>
+        <div className="card large empty-cell">Пока нет целей. Создайте первую цель с суммой и сроком в <Link to="/settings">Настройках</Link>.</div>
       </div>
     );
   }
@@ -92,51 +81,40 @@ export default function RetirementPage() {
       <section className="hero-panel compact">
         <div>
           <p className="eyebrow">Цели накоплений</p>
-          <h3>Планируйте крупные покупки</h3>
-          <p>Ваш возраст: {userAge} лет · Всего {formatCurrency(totalMonthly)}/мес на все цели</p>
+          <h2>Понятный план для каждой цели</h2>
+          <p>Чтобы выполнить все цели в срок, откладывайте {formatCurrency(totalMonthly)}/мес. Расчёт не учитывает доходность и инфляцию.</p>
         </div>
-        <div className="hero-badge">{goals.length} {goals.length === 1 ? 'цель' : goals.length < 5 ? 'цели' : 'целей'}</div>
+        <Link className="hero-action" to="/settings">Управлять целями</Link>
       </section>
 
-      <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-        {calculated!.map(goal => {
-          const pct = goal.progress;
-          return (
-            <article key={goal.id} className="card">
-              <div className="assistant-header">
-                <div>
-                  <p className="eyebrow">до {goal.targetAge} лет</p>
-                  <h4>{goal.name}</h4>
-                </div>
-                <span>{goal.yearsLeft} {goal.yearsLeft === 1 ? 'год' : goal.yearsLeft < 5 ? 'года' : 'лет'}</span>
+      <div className="goal-plan-grid">
+        {calculated.map(goal => (
+          <article key={goal.id} className="card goal-plan-card">
+            <div className="goal-plan-head">
+              <div>
+                <p className="eyebrow">{goal.type ?? 'Пенсия'}</p>
+                <h2>{goal.name}</h2>
               </div>
+              <span className="goal-type">{formatDeadline(goal)}</span>
+            </div>
 
-              <div className="bar-track" style={{ margin: '12px 0 8px' }}>
-                <span style={{ width: `${pct}%` }} />
+            <div className="goal-progress-label"><span>Накоплено</span><strong>{goal.progress}%</strong></div>
+            <div className="bar-track"><span style={{ width: `${goal.progress}%` }} /></div>
+            <div className="goal-progress-numbers"><span>{formatCurrency(goal.currentSavings)}</span><span>из {formatCurrency(goal.targetAmount)}</span></div>
+
+            {goal.remaining === 0 ? (
+              <div className="goal-plan-result success">Цель достигнута. Можно создать следующую.</div>
+            ) : goal.monthly !== null ? (
+              <div className="goal-plan-result">
+                <span>Откладывать каждый месяц</span>
+                <strong>{formatCurrency(goal.monthly)}</strong>
+                <small>Осталось {formatCurrency(goal.remaining)} и {goal.monthsLeft} мес.</small>
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-sm)', marginBottom: 12, color: '#b8cfe8' }}>
-                <span>{formatCurrency(goal.currentSavings)}</span>
-                <span>{formatCurrency(goal.targetAmount)}</span>
-              </div>
-
-              <div className="forecast-box">
-                <p style={{ margin: 0 }}>
-                  {goal.remaining > 0
-                    ? <>Нужно ещё <strong>{formatCurrency(goal.remaining)}</strong> · <strong>{formatCurrency(goal.monthly)}/мес</strong></>
-                    : '✅ Цель достигнута!'}
-                </p>
-              </div>
-
-              {goal.remaining > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12, fontSize: 'var(--font-size-sm)', color: '#b8cfe8' }}>
-                  <span>Осталось месяцев: {goal.monthsLeft}</span>
-                  <span style={{ textAlign: 'right' }}>Прогресс: {pct}%</span>
-                </div>
-              )}
-            </article>
-          );
-        })}
+            ) : (
+              <div className="goal-plan-result warning">Укажите срок цели в настройках, чтобы рассчитать ежемесячный взнос.</div>
+            )}
+          </article>
+        ))}
       </div>
     </div>
   );

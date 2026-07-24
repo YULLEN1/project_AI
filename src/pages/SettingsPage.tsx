@@ -39,7 +39,9 @@ type SavingsGoal = {
   id: string;
   name: string;
   targetAmount: number;
-  targetAge: number;
+  type?: string;
+  targetDate?: string;
+  targetAge?: number;
   currentSavings: number;
 };
 
@@ -68,6 +70,13 @@ function readJson<T>(key: string, fallback: T): T {
 
 function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
+}
+
+const GOAL_TYPES = ['Крупная покупка', 'Резерв', 'Путешествие', 'Образование', 'Пенсия', 'Другое'] as const;
+
+function formatTargetDate(value?: string) {
+  if (!value) return 'срок не указан';
+  return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`));
 }
 
 function migrateOldRetirement() {
@@ -140,8 +149,9 @@ export default function SettingsPage() {
   const [familyGoalTarget, setFamilyGoalTarget] = useState('');
 
   const [goalName, setGoalName] = useState('');
+  const [goalType, setGoalType] = useState<typeof GOAL_TYPES[number]>('Крупная покупка');
   const [goalAmount, setGoalAmount] = useState('');
-  const [goalAge, setGoalAge] = useState('');
+  const [goalDate, setGoalDate] = useState('');
   const [goalSavings, setGoalSavings] = useState('');
 
   const [suggestionName, setSuggestionName] = useState(suggestion.name);
@@ -224,23 +234,23 @@ export default function SettingsPage() {
   const handleAddGoal = (e: FormEvent) => {
     e.preventDefault();
     const parsedAmount = Number(goalAmount);
-    const parsedAge = Number(goalAge);
     const parsedSavings = Number(goalSavings);
-    if (!goalName.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !Number.isFinite(parsedAge) || parsedAge <= 0) {
-      setMessage('Для цели укажите название, сумму и возраст достижения.');
+    if (!goalName.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !goalDate) {
+      setMessage('Для цели укажите название, сумму и срок достижения.');
       return;
     }
     const next: SavingsGoal = {
       id: `${Date.now()}-${goalName.trim()}`,
       name: goalName.trim(),
+      type: goalType,
       targetAmount: parsedAmount,
-      targetAge: parsedAge,
+      targetDate: goalDate,
       currentSavings: Number.isFinite(parsedSavings) && parsedSavings > 0 ? parsedSavings : 0,
     };
     handleSaveSavingsGoals([...savingsGoals, next]);
     setGoalName('');
     setGoalAmount('');
-    setGoalAge('');
+    setGoalDate('');
     setGoalSavings('');
   };
 
@@ -431,18 +441,6 @@ export default function SettingsPage() {
               <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить по умолчанию</button>
             </div>
 
-            {userAge !== null && savingsGoals.length > 0 && (
-              <div className="forecast-box" style={{ marginTop: 20 }}>
-                <p>Всего целей: {savingsGoals.length}</p>
-                <small style={{ display: 'block', marginTop: 4 }}>
-                  {savingsGoals.map(g => {
-                    const yearsLeft = Math.max(1, g.targetAge - userAge);
-                    const monthly = Math.round((g.targetAmount - g.currentSavings) / (yearsLeft * 12));
-                    return `${g.name}: ${formatCurrency(monthly)}/мес`;
-                  }).join(' · ')}
-                </small>
-              </div>
-            )}
           </form>
         </section>
       )}
@@ -454,20 +452,17 @@ export default function SettingsPage() {
             <div className="settings-block-head">
               <div>
                 <h4>Цели накоплений</h4>
-                <p>Добавьте цели: квартира, машина, пенсия, образование детей — любые.</p>
+                <p>Для каждой цели задайте сумму, уже накопленное и дату, к которой хотите прийти.</p>
               </div>
               <span className="mini-pill">{savingsGoals.length} целей</span>
             </div>
             <div className="settings-list">
               {savingsGoals.length ? savingsGoals.map(goal => {
-                const age = userAge ?? 30;
-                const yearsLeft = Math.max(1, goal.targetAge - age);
-                const monthly = Math.round((goal.targetAmount - goal.currentSavings) / (yearsLeft * 12));
                 return (
                   <div key={goal.id} className="settings-row">
                     <div>
-                      <strong>{goal.name}</strong>
-                      <p>{formatCurrency(goal.targetAmount)} · к {goal.targetAge} годам · {formatCurrency(monthly)}/мес</p>
+                      <strong>{goal.name} <span className="goal-type">{goal.type ?? 'Пенсия'}</span></strong>
+                      <p>{formatCurrency(goal.targetAmount)} · {goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : `к ${goal.targetAge ?? 'неизвестному'} годам`}</p>
                     </div>
                     <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)} aria-label={`Удалить ${goal.name}`}>Удалить</button>
                   </div>
@@ -477,15 +472,14 @@ export default function SettingsPage() {
               )}
             </div>
             <form className="inline-form" onSubmit={handleAddGoal}>
-              <label><span className="sr-only">Название цели</span><input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Название (Квартира, Пенсия...)" /></label>
-              <label><span className="sr-only">Сумма цели</span><input value={goalAmount} onChange={e => setGoalAmount(e.target.value)} placeholder="Сумма цели, ₽" type="number" inputMode="decimal" /></label>
-              <label><span className="sr-only">Возраст достижения цели</span><input value={goalAge} onChange={e => setGoalAge(e.target.value)} placeholder="Возраст достижения" type="number" /></label>
+              <label><span className="sr-only">Тип цели</span><select value={goalType} onChange={e => setGoalType(e.target.value as typeof GOAL_TYPES[number])}>{GOAL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
+              <label><span className="sr-only">Название цели</span><input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Например, отпуск в Японии" /></label>
+              <label><span className="sr-only">Сумма цели</span><input value={goalAmount} onChange={e => setGoalAmount(e.target.value)} placeholder="Сколько нужно, ₽" type="number" inputMode="decimal" /></label>
+              <label><span className="sr-only">Срок достижения цели</span><input value={goalDate} onChange={e => setGoalDate(e.target.value)} aria-label="Срок достижения цели" type="month" min={new Date().toISOString().slice(0, 7)} /></label>
               <label><span className="sr-only">Текущие накопления</span><input value={goalSavings} onChange={e => setGoalSavings(e.target.value)} placeholder="Уже есть, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить</button>
             </form>
-            {userAge === null && (
-              <p className="settings-note">Укажите свой возраст в «Основных» настройках, чтобы рассчитать ежемесячный взнос.</p>
-            )}
+            <p className="settings-note">План взносов для каждой цели появится в разделе «Цели накоплений».</p>
           </div>
         </section>
       )}

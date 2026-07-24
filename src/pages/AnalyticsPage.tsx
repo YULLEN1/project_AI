@@ -27,7 +27,8 @@ type SavingsGoal = {
   id: string;
   name: string;
   targetAmount: number;
-  targetAge: number;
+  targetDate?: string;
+  targetAge?: number;
   currentSavings: number;
 };
 
@@ -120,6 +121,16 @@ function readNumber(key: string): number | null {
   const raw = window.localStorage.getItem(key);
   const value = raw ? Number(raw) : NaN;
   return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function getMonthsUntil(targetDate?: string, targetAge?: number, userAge?: number | null) {
+  if (targetDate) {
+    const now = new Date();
+    const target = new Date(`${targetDate}T00:00:00`);
+    return Math.max(1, (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth());
+  }
+  if (targetAge && userAge) return Math.max(1, (targetAge - userAge) * 12);
+  return null;
 }
 
 function buildLinePath(points: ForecastPoint[]) {
@@ -243,23 +254,26 @@ export default function AnalyticsPage() {
     let retirementForecast: number | null = null;
     let retirementMonthly: number | null = null;
     let retirementForecastPoints: ForecastPoint[] = [];
-    if (userAge && savingsGoals.length > 0) {
-      const retirementPlans = savingsGoals.map(goal => {
-        const monthsLeft = Math.max(1, (goal.targetAge - userAge) * 12);
+    if (savingsGoals.length > 0) {
+      const retirementPlans = savingsGoals.flatMap(goal => {
+        const monthsLeft = getMonthsUntil(goal.targetDate, goal.targetAge, userAge);
+        if (!monthsLeft) return [];
         const remaining = Math.max(0, goal.targetAmount - goal.currentSavings);
         return { ...goal, monthsLeft, monthly: Math.ceil(remaining / monthsLeft) };
       });
-      retirementMonthly = retirementPlans.reduce((sum, goal) => sum + goal.monthly, 0);
-      retirementForecastPoints = Array.from({ length: 5 }, (_, index) => {
-        const months = (index + 1) * 12;
-        return {
-          year: index + 1,
-          value: retirementPlans.reduce((sum, goal) => (
-            sum + Math.min(goal.targetAmount, goal.currentSavings + goal.monthly * Math.min(months, goal.monthsLeft))
-          ), 0),
-        };
-      });
-      retirementForecast = retirementForecastPoints[0].value;
+      if (retirementPlans.length > 0) {
+        retirementMonthly = retirementPlans.reduce((sum, goal) => sum + goal.monthly, 0);
+        retirementForecastPoints = Array.from({ length: 5 }, (_, index) => {
+          const months = (index + 1) * 12;
+          return {
+            year: index + 1,
+            value: retirementPlans.reduce((sum, goal) => (
+              sum + Math.min(goal.targetAmount, goal.currentSavings + goal.monthly * Math.min(months, goal.monthsLeft))
+            ), 0),
+          };
+        });
+        retirementForecast = retirementForecastPoints[0].value;
+      }
     }
 
     return {
@@ -360,7 +374,7 @@ export default function AnalyticsPage() {
               className={`chip ${forecastType === 'retirement' ? 'active' : ''}`}
               onClick={() => setForecastType('retirement')}
             >
-              Пенсионный
+              По целям
             </button>
           </div>
           {analytics ? (
@@ -408,11 +422,11 @@ export default function AnalyticsPage() {
               )}
               {forecastType === 'retirement' && (
                 <>
-                  <p>Пенсионный прогноз:</p>
+                  <p>Прогноз по вашим целям накоплений:</p>
                   <div className="forecast-box">
                     <p>Через год</p>
                     <strong>{analytics.retirementForecast === null ? 'Нет данных' : formatCurrency(analytics.retirementForecast)}</strong>
-                    <span>прогноз накоплений по целям</span>
+                    <span>накопления по плану целей</span>
                     {analytics.retirementMonthly !== null && (
                       <p style={{ marginTop: 8, color: '#84f4c0' }}>
                         Нужно откладывать: {formatCurrency(analytics.retirementMonthly)}/мес
@@ -422,7 +436,7 @@ export default function AnalyticsPage() {
                   <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
                     {analytics.retirementMonthly !== null
                       ? 'Ежемесячный взнос рассчитан отдельно для каждой цели с её сроком.'
-                      : 'Добавьте цели накоплений и укажите возраст для точного расчёта'}
+                      : 'Добавьте цели накоплений и укажите для них срок, чтобы увидеть расчёт'}
                   </p>
                   {analytics.retirementForecastPoints.length > 0 && (
                     <ForecastChart points={analytics.retirementForecastPoints} label="Прогноз накоплений по целям на пять лет" />
