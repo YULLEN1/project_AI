@@ -282,6 +282,7 @@ export default function SettingsPage() {
     setGoalDate('');
     setGoalSavings('');
     setMonthlyPension('');
+    setMessage('Цель накоплений добавлена.');
   };
 
   const handleRemoveGoal = (id: string) => {
@@ -530,7 +531,7 @@ export default function SettingsPage() {
               )}
             </div>
             <form className="inline-form" onSubmit={handleAddGoal}>
-              <label><span className="sr-only">Тип цели</span><select value={goalType} onChange={e => setGoalType(e.target.value as typeof GOAL_TYPES[number])}>{GOAL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
+              <label><span className="sr-only">Тип цели</span><select value={goalType} onChange={e => { const type = e.target.value as typeof GOAL_TYPES[number]; setGoalType(type); if (type === 'Пенсия' && !goalName.trim()) setGoalName('Пенсия'); }}>{GOAL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
               <label><span className="sr-only">Название цели</span><input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Например, отпуск в Японии" /></label>
               {goalType === 'Пенсия' ? (
                 <>
@@ -547,6 +548,7 @@ export default function SettingsPage() {
               <label><span className="sr-only">Текущие накопления</span><input value={goalSavings} onChange={e => setGoalSavings(e.target.value)} placeholder="Уже есть, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить</button>
             </form>
+            {message && <div className={message.includes('добавлена') ? 'auth-success' : 'auth-error'} role="status">{message}</div>}
             <p className="settings-note">Для пенсии капитал считается как ежемесячная выплата на весь срок после выхода на пенсию. Доходность и инфляция не учитываются.</p>
           </div>
         </section>
