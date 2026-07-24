@@ -20,8 +20,6 @@ type FamilyMember = {
   role: string;
   contribute: number;
   color: string;
-  nextIncomeDate?: string;
-  incomeAmount?: number;
 };
 
 type FamilyGoal = {
@@ -33,6 +31,10 @@ type FamilyGoal = {
   priority?: 'high' | 'medium' | 'low';
   monthlyContribution?: number;
   memberIds?: string[];
+  distribution?: 'equal' | 'income' | 'custom';
+  memberContributions?: Record<string, number>;
+  isPaused?: boolean;
+  activity?: Array<{ id: string; amount: number; date: string; memberId?: string }>;
 };
 
 type SuggestedItem = {
@@ -152,8 +154,6 @@ export default function SettingsPage() {
   const [memberName, setMemberName] = useState('');
   const [memberRole, setMemberRole] = useState('Доход');
   const [memberAmount, setMemberAmount] = useState('');
-  const [memberIncomeDate, setMemberIncomeDate] = useState('');
-  const [memberIncomeAmount, setMemberIncomeAmount] = useState('');
   const [familyGoalTitle, setFamilyGoalTitle] = useState('');
   const [familyGoalTarget, setFamilyGoalTarget] = useState('');
   const [familyGoalSavings, setFamilyGoalSavings] = useState('');
@@ -161,6 +161,8 @@ export default function SettingsPage() {
   const [familyGoalPriority, setFamilyGoalPriority] = useState<FamilyGoal['priority']>('medium');
   const [familyGoalContribution, setFamilyGoalContribution] = useState('');
   const [familyGoalMemberIds, setFamilyGoalMemberIds] = useState<string[]>([]);
+  const [familyGoalDistribution, setFamilyGoalDistribution] = useState<NonNullable<FamilyGoal['distribution']>>('equal');
+  const [familyGoalMemberContributions, setFamilyGoalMemberContributions] = useState<Record<string, string>>({});
 
   const [goalName, setGoalName] = useState('');
   const [goalType, setGoalType] = useState<typeof GOAL_TYPES[number]>('Крупная покупка');
@@ -304,17 +306,10 @@ export default function SettingsPage() {
       contribute: parsed,
       color: '#37c7ff',
     };
-    if (memberIncomeDate) next.nextIncomeDate = memberIncomeDate;
-    if (memberIncomeAmount) {
-      const inc = Number(memberIncomeAmount);
-      if (Number.isFinite(inc) && inc > 0) next.incomeAmount = inc;
-    }
     handleSaveMembers([...members, next]);
     setMemberName('');
     setMemberRole('Доход');
     setMemberAmount('');
-    setMemberIncomeDate('');
-    setMemberIncomeAmount('');
   };
 
   const handleRemoveMember = (id: string) => {
@@ -326,8 +321,13 @@ export default function SettingsPage() {
     const parsed = Number(familyGoalTarget);
     const parsedSavings = Number(familyGoalSavings);
     const parsedContribution = Number(familyGoalContribution);
+    const customContributionTotal = familyGoalMemberIds.reduce((sum, id) => sum + (Number(familyGoalMemberContributions[id]) || 0), 0);
     if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0 || !familyGoalDate || !Number.isFinite(parsedSavings) || parsedSavings < 0 || !Number.isFinite(parsedContribution) || parsedContribution < 0) {
       setMessage('Для семейной цели укажите название, сумму, накопления, срок и ежемесячный взнос.');
+      return;
+    }
+    if (familyGoalDistribution === 'custom' && familyGoalMemberIds.length > 0 && customContributionTotal !== parsedContribution) {
+      setMessage('Сумма индивидуальных взносов должна совпадать с общим взносом на цель.');
       return;
     }
     const next: FamilyGoal = {
@@ -339,6 +339,11 @@ export default function SettingsPage() {
       priority: familyGoalPriority,
       monthlyContribution: parsedContribution,
       memberIds: familyGoalMemberIds,
+      distribution: familyGoalDistribution,
+      memberContributions: familyGoalDistribution === 'custom'
+        ? Object.fromEntries(familyGoalMemberIds.map(id => [id, Number(familyGoalMemberContributions[id]) || 0]))
+        : undefined,
+      activity: [],
     };
     handleSaveFamilyGoals([...familyGoalsList, next]);
     setFamilyGoalTitle('');
@@ -348,6 +353,8 @@ export default function SettingsPage() {
     setFamilyGoalPriority('medium');
     setFamilyGoalContribution('');
     setFamilyGoalMemberIds([]);
+    setFamilyGoalDistribution('equal');
+    setFamilyGoalMemberContributions({});
   };
 
   const toggleFamilyGoalMember = (id: string) => {
@@ -584,9 +591,7 @@ export default function SettingsPage() {
             <form className="inline-form" onSubmit={handleAddMember}>
               <label><span className="sr-only">Имя участника</span><input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" /></label>
               <label><span className="sr-only">Тип суммы</span><select value={memberRole} onChange={e => setMemberRole(e.target.value)}><option value="Доход">Доход</option><option value="Расход">Обязательный расход</option></select></label>
-              <label><span className="sr-only">Сумма</span><input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Сумма, ₽" type="number" inputMode="decimal" /></label>
-              <label><span className="sr-only">Дата следующего дохода</span><input value={memberIncomeDate} onChange={e => setMemberIncomeDate(e.target.value)} type="date" /></label>
-              <label><span className="sr-only">Сумма следующего дохода</span><input value={memberIncomeAmount} onChange={e => setMemberIncomeAmount(e.target.value)} placeholder="Доход, ₽" type="number" inputMode="decimal" /></label>
+              <label><span className="sr-only">Ежемесячная сумма</span><input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Ежемесячная сумма, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить</button>
             </form>
           </div>
@@ -604,7 +609,7 @@ export default function SettingsPage() {
                 <div key={goal.id} className="settings-row">
                   <div>
                     <strong>{goal.title} <span className={`goal-priority ${goal.priority ?? 'medium'}`}>{goal.priority === 'high' ? 'Высокий приоритет' : goal.priority === 'low' ? 'Низкий приоритет' : 'Средний приоритет'}</span></strong>
-                    <p>{formatCurrency(goal.currentSavings ?? 0)} из {formatCurrency(goal.target)} · {goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : 'срок не указан'} · {formatCurrency(goal.monthlyContribution ?? 0)}/мес</p>
+                    <p>{formatCurrency(goal.currentSavings ?? 0)} из {formatCurrency(goal.target)} · {goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : 'срок не указан'} · {goal.isPaused ? 'план на паузе' : `${formatCurrency(goal.monthlyContribution ?? 0)}/мес`}</p>
                   </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button type="button" className="text-link text-button" onClick={() => handleAddFamilyGoalSavings(goal.id)}>Пополнить</button>
@@ -625,12 +630,28 @@ export default function SettingsPage() {
               <button type="submit">Добавить цель</button>
             </form>
             {members.length > 0 && (
-              <fieldset className="goal-members">
-                <legend>Кто участвует в цели</legend>
-                {members.map(member => <label key={member.id}><input type="checkbox" checked={familyGoalMemberIds.includes(member.id)} onChange={() => toggleFamilyGoalMember(member.id)} /> {member.name}</label>)}
-              </fieldset>
+              <>
+                <fieldset className="goal-members">
+                  <legend>Кто участвует в цели</legend>
+                  {members.map(member => <label key={member.id}><input type="checkbox" checked={familyGoalMemberIds.includes(member.id)} onChange={() => toggleFamilyGoalMember(member.id)} /> {member.name}</label>)}
+                </fieldset>
+                <fieldset className="goal-members">
+                  <legend>Как распределять ежемесячный взнос</legend>
+                  <label><input type="radio" name="family-goal-distribution" checked={familyGoalDistribution === 'equal'} onChange={() => setFamilyGoalDistribution('equal')} /> Поровну</label>
+                  <label><input type="radio" name="family-goal-distribution" checked={familyGoalDistribution === 'income'} onChange={() => setFamilyGoalDistribution('income')} /> Пропорционально доходу</label>
+                  <label><input type="radio" name="family-goal-distribution" checked={familyGoalDistribution === 'custom'} onChange={() => setFamilyGoalDistribution('custom')} /> Указать вручную</label>
+                </fieldset>
+                {familyGoalDistribution === 'custom' && familyGoalMemberIds.length > 0 && (
+                  <div className="input-grid goal-contribution-grid">
+                    {familyGoalMemberIds.map(id => {
+                      const member = members.find(item => item.id === id);
+                      return <label key={id}>{member?.name ?? 'Участник'}<input type="number" min="0" inputMode="decimal" value={familyGoalMemberContributions[id] ?? ''} onChange={e => setFamilyGoalMemberContributions(current => ({ ...current, [id]: e.target.value }))} placeholder="Взнос, ₽" /></label>;
+                    })}
+                  </div>
+                )}
+              </>
             )}
-            <p className="settings-note">Ежемесячный взнос делится поровну между выбранными участниками. Пополнения фонда можно вносить у сохранённой цели.</p>
+            <p className="settings-note">Пополнения фонда можно вносить у сохранённой цели. Для ручного распределения сумма взносов участников должна совпадать с общим ежемесячным взносом.</p>
           </div>
         </section>
       )}
