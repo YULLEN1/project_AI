@@ -1,4 +1,4 @@
-import { FormEvent, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 
 const prompts = [
   'Почему в этом месяце денег стало меньше?',
@@ -6,6 +6,7 @@ const prompts = [
   'Как накопить на крупную покупку?',
   'Что можно сократить без ущерба для жизни?',
 ];
+const CHAT_STORAGE_KEY = 'moneypilot-assistant-messages';
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -43,7 +44,9 @@ interface Message {
 }
 
 export default function AssistantPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => readJson<Message[]>(CHAT_STORAGE_KEY, []).filter(message => (
+    (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string'
+  )));
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [consent, setConsent] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('moneypilot-ai-consent') === 'true');
@@ -53,6 +56,11 @@ export default function AssistantPage() {
       if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
     });
   };
+
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    scrollToBottom();
+  }, [messages]);
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
@@ -156,15 +164,22 @@ export default function AssistantPage() {
           </div>
 
           <form className="chat-form" onSubmit={handleSubmit}>
-            <input
+            <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="Напишите вопрос..."
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  send(input.trim());
+                }
+              }}
+              placeholder="Опишите вашу ситуацию или задайте вопрос. Enter - отправить, Shift+Enter - новая строка."
               aria-label="Вопрос финансовому агенту"
               disabled={loading}
+              rows={5}
             />
             <button type="submit" className="primary-button" disabled={loading || !input.trim()}>
-              {loading ? '...' : '→'}
+              {loading ? 'Отправляем...' : 'Отправить'}
             </button>
           </form>
         </div>
