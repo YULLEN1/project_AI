@@ -9,18 +9,13 @@ type Purchase = {
   date: string;
 };
 
-type FamilyMember = {
-  id: string;
-  name: string;
-  role: string;
-  contribute: number;
-  color: string;
-};
-
 type FamilyGoal = {
   id: string;
   title: string;
   target: number;
+  currentSavings?: number;
+  targetDate?: string;
+  monthlyContribution?: number;
 };
 
 type SavingsGoal = {
@@ -293,10 +288,7 @@ export default function AnalyticsPage() {
         ? Math.round((spendingDays[spendingDays.length - 1].value - spendingDays[0].value) / spendingDays[0].value * 100)
         : 0;
 
-    const budget = readNumber('moneypilot-budget') ?? 0;
     const income = readNumber('moneypilot-income');
-    const savings = readNumber('moneypilot-savings') ?? 0;
-    const members = readJson<FamilyMember[]>('moneypilot-family-members', []);
     const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
     const userAge = readNumber('moneypilot-user-age');
     const savingsGoals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
@@ -311,9 +303,8 @@ export default function AnalyticsPage() {
     }));
 
     const totalFamilyTarget = familyGoals.reduce((sum, g) => sum + g.target, 0);
-    const familyAvailable = members.reduce((sum, member) => sum + (member.role === 'Расход' ? -member.contribute : member.contribute), 0);
-    const currentGoalSavings = savings + Math.max(0, familyAvailable);
-    const monthlySavings = Math.max(0, budget - monthlyExpenses);
+    const currentGoalSavings = familyGoals.reduce((sum, goal) => sum + (goal.currentSavings ?? 0), 0);
+    const monthlySavings = familyGoals.reduce((sum, goal) => sum + (goal.monthlyContribution ?? 0), 0);
     const goalsForecast = currentGoalSavings + monthlySavings * 12;
     const goalsProgress = totalFamilyTarget > 0
       ? Math.min(100, Math.round((goalsForecast / totalFamilyTarget) * 100))

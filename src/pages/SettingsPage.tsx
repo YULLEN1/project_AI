@@ -28,6 +28,11 @@ type FamilyGoal = {
   id: string;
   title: string;
   target: number;
+  currentSavings?: number;
+  targetDate?: string;
+  priority?: 'high' | 'medium' | 'low';
+  monthlyContribution?: number;
+  memberIds?: string[];
 };
 
 type SuggestedItem = {
@@ -151,6 +156,11 @@ export default function SettingsPage() {
   const [memberIncomeAmount, setMemberIncomeAmount] = useState('');
   const [familyGoalTitle, setFamilyGoalTitle] = useState('');
   const [familyGoalTarget, setFamilyGoalTarget] = useState('');
+  const [familyGoalSavings, setFamilyGoalSavings] = useState('');
+  const [familyGoalDate, setFamilyGoalDate] = useState('');
+  const [familyGoalPriority, setFamilyGoalPriority] = useState<FamilyGoal['priority']>('medium');
+  const [familyGoalContribution, setFamilyGoalContribution] = useState('');
+  const [familyGoalMemberIds, setFamilyGoalMemberIds] = useState<string[]>([]);
 
   const [goalName, setGoalName] = useState('');
   const [goalType, setGoalType] = useState<typeof GOAL_TYPES[number]>('Крупная покупка');
@@ -313,22 +323,50 @@ export default function SettingsPage() {
   const handleAddFamilyGoal = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(familyGoalTarget);
-    if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0) {
-      setMessage('Для семейной цели укажите название и сумму.');
+    const parsedSavings = Number(familyGoalSavings);
+    const parsedContribution = Number(familyGoalContribution);
+    if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0 || !familyGoalDate || !Number.isFinite(parsedSavings) || parsedSavings < 0 || !Number.isFinite(parsedContribution) || parsedContribution < 0) {
+      setMessage('Для семейной цели укажите название, сумму, накопления, срок и ежемесячный взнос.');
       return;
     }
     const next: FamilyGoal = {
       id: `${Date.now()}-${familyGoalTitle.trim()}`,
       title: familyGoalTitle.trim(),
       target: parsed,
+      currentSavings: parsedSavings,
+      targetDate: familyGoalDate,
+      priority: familyGoalPriority,
+      monthlyContribution: parsedContribution,
+      memberIds: familyGoalMemberIds,
     };
     handleSaveFamilyGoals([...familyGoalsList, next]);
     setFamilyGoalTitle('');
     setFamilyGoalTarget('');
+    setFamilyGoalSavings('');
+    setFamilyGoalDate('');
+    setFamilyGoalPriority('medium');
+    setFamilyGoalContribution('');
+    setFamilyGoalMemberIds([]);
+  };
+
+  const toggleFamilyGoalMember = (id: string) => {
+    setFamilyGoalMemberIds(current => current.includes(id) ? current.filter(memberId => memberId !== id) : [...current, id]);
   };
 
   const handleRemoveFamilyGoal = (id: string) => {
     if (window.confirm('Удалить семейную цель?')) handleSaveFamilyGoals(familyGoalsList.filter(g => g.id !== id));
+  };
+
+  const handleAddFamilyGoalSavings = (id: string) => {
+    const value = window.prompt('Сколько добавить в фонд этой цели?', '');
+    if (value === null) return;
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Введите сумму пополнения больше нуля.');
+      return;
+    }
+    handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount } : goal));
+    setMessage('Пополнение семейной цели сохранено.');
   };
 
   const handleSaveSuggestion = (e: FormEvent) => {
@@ -555,7 +593,7 @@ export default function SettingsPage() {
             <div className="settings-block-head">
               <div>
                 <h4>Семейные цели</h4>
-                <p>Создайте задачи и храните запланированные суммы.</p>
+                <p>Укажите накопленное, дедлайн и ежемесячный взнос, чтобы видеть реальный план.</p>
               </div>
               <span className="mini-pill">{familyGoalsList.length} целей</span>
             </div>
@@ -563,20 +601,34 @@ export default function SettingsPage() {
               {familyGoalsList.length ? familyGoalsList.map(goal => (
                 <div key={goal.id} className="settings-row">
                   <div>
-                    <strong>{goal.title}</strong>
-                    <p>Цель {goal.target.toLocaleString('ru-RU')} ₽</p>
+                    <strong>{goal.title} <span className={`goal-priority ${goal.priority ?? 'medium'}`}>{goal.priority === 'high' ? 'Высокий приоритет' : goal.priority === 'low' ? 'Низкий приоритет' : 'Средний приоритет'}</span></strong>
+                    <p>{formatCurrency(goal.currentSavings ?? 0)} из {formatCurrency(goal.target)} · {goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : 'срок не указан'} · {formatCurrency(goal.monthlyContribution ?? 0)}/мес</p>
                   </div>
-                  <button type="button" className="text-button" onClick={() => handleRemoveFamilyGoal(goal.id)} aria-label={`Удалить ${goal.title}`}>Удалить</button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="text-link text-button" onClick={() => handleAddFamilyGoalSavings(goal.id)}>Пополнить</button>
+                      <button type="button" className="text-button" onClick={() => handleRemoveFamilyGoal(goal.id)} aria-label={`Удалить ${goal.title}`}>Удалить</button>
+                    </div>
                 </div>
               )) : (
                 <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
               )}
             </div>
             <form className="inline-form" onSubmit={handleAddFamilyGoal}>
-              <input value={familyGoalTitle} onChange={e => setFamilyGoalTitle(e.target.value)} placeholder="Название цели" />
-              <input value={familyGoalTarget} onChange={e => setFamilyGoalTarget(e.target.value)} placeholder="Сумма цели" type="number" />
+              <label><span className="sr-only">Название семейной цели</span><input value={familyGoalTitle} onChange={e => setFamilyGoalTitle(e.target.value)} placeholder="Название цели" /></label>
+              <label><span className="sr-only">Сумма семейной цели</span><input value={familyGoalTarget} onChange={e => setFamilyGoalTarget(e.target.value)} placeholder="Сумма цели, ₽" type="number" inputMode="decimal" /></label>
+              <label><span className="sr-only">Уже накоплено на семейную цель</span><input value={familyGoalSavings} onChange={e => setFamilyGoalSavings(e.target.value)} placeholder="Уже накоплено, ₽" type="number" inputMode="decimal" /></label>
+              <label><span className="sr-only">Дедлайн семейной цели</span><input value={familyGoalDate} onChange={e => setFamilyGoalDate(e.target.value)} type="month" min={new Date().toISOString().slice(0, 7)} aria-label="Дедлайн семейной цели" /></label>
+              <label><span className="sr-only">Приоритет семейной цели</span><select value={familyGoalPriority} onChange={e => setFamilyGoalPriority(e.target.value as FamilyGoal['priority'])}><option value="high">Высокий приоритет</option><option value="medium">Средний приоритет</option><option value="low">Низкий приоритет</option></select></label>
+              <label><span className="sr-only">Ежемесячный взнос на семейную цель</span><input value={familyGoalContribution} onChange={e => setFamilyGoalContribution(e.target.value)} placeholder="Взнос в месяц, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить цель</button>
             </form>
+            {members.length > 0 && (
+              <fieldset className="goal-members">
+                <legend>Кто участвует в цели</legend>
+                {members.map(member => <label key={member.id}><input type="checkbox" checked={familyGoalMemberIds.includes(member.id)} onChange={() => toggleFamilyGoalMember(member.id)} /> {member.name}</label>)}
+              </fieldset>
+            )}
+            <p className="settings-note">Ежемесячный взнос делится поровну между выбранными участниками. Пополнения фонда можно вносить у сохранённой цели.</p>
           </div>
         </section>
       )}

@@ -1056,6 +1056,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .goal-plan-result small { color: #b8cfe8; }
 .goal-plan-result.success { color: #9af7d0; background: rgba(92, 205, 102, 0.12); }
 .goal-plan-result.warning { color: var(--color-warning); background: rgba(255, 202, 122, 0.1); }
+.goal-priority { display: inline-block; padding: 3px 7px; border-radius: var(--radius-pill); font-size: var(--font-size-xs); color: #b8cfe8; background: rgba(255,255,255,0.08); }
+.goal-priority.high { color: #ffb0b7; background: rgba(255, 88, 88, 0.14); }
+.goal-priority.low { color: #b8d5ff; background: rgba(55, 199, 255, 0.1); }
+.family-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.family-goal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 16px; }
+.family-goal-card { display: grid; gap: 10px; padding: 16px; border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-md); background: rgba(255,255,255,0.035); }
+.family-goal-card h3 { margin: 8px 0 0; font-size: var(--font-size-md); }
+.family-goal-status { padding: 8px 10px; border-radius: var(--radius-sm); font-size: var(--font-size-sm); font-weight: 600; }
+.family-goal-status.done, .family-goal-status.on-track { color: #9af7d0; background: rgba(92, 205, 102, 0.12); }
+.family-goal-status.at-risk { color: #ffca7a; background: rgba(255, 202, 122, 0.12); }
+.family-goal-status.missing-date { color: #b8d5ff; background: rgba(55, 199, 255, 0.1); }
+.goal-members { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 0; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-md); }
+.goal-members legend { padding: 0 4px; color: #b8cfe8; font-size: var(--font-size-sm); }
+.goal-members label { display: flex; align-items: center; gap: 5px; font-size: var(--font-size-sm); }
+.text-link { color: #8fd4ff; font-size: var(--font-size-sm); }
+.theme-light .family-goal-card { background: rgba(21, 52, 91, 0.035); border-color: rgba(32, 56, 88, 0.12); }
+.theme-light .goal-members { border-color: rgba(32, 56, 88, 0.14); }
 
 /* ── Responsive: ≤1100px ── */
 @media (max-width: 1100px) {
@@ -1094,6 +1111,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .metric-card strong { font-size: 1.1rem; }
   .assistant-form textarea { min-height: 100px; }
   .analytics-totals { grid-template-columns: 1fr; }
+  .family-summary { grid-template-columns: 1fr 1fr; }
   .expense-breakdown { grid-template-columns: 1fr; }
 }
 
