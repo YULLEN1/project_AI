@@ -43,6 +43,15 @@ interface Message {
   content: string;
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const value = error as { error?: unknown; message?: unknown; detail?: unknown };
+    return getErrorMessage(value.error ?? value.message ?? value.detail, fallback);
+  }
+  return fallback;
+}
+
 export default function AssistantPage() {
   const [messages, setMessages] = useState<Message[]>(() => readJson<Message[]>(CHAT_STORAGE_KEY, []).filter(message => (
     (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string'
@@ -84,7 +93,7 @@ export default function AssistantPage() {
 
       if (!response.ok) {
         const err = await response.json().catch(() => null);
-        const errMsg = err?.error || `Ошибка ${response.status}`;
+        const errMsg = getErrorMessage(err, `Ошибка ${response.status}`);
         setMessages(prev => [...prev, { role: 'assistant', content: `❌ ${errMsg}` }]);
         return;
       }

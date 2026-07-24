@@ -1,6 +1,16 @@
-const API_TOKEN = 'eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6IjFrYnhacFJNQGJSI0tSbE1xS1lqIn0.eyJ1c2VyIjoicXAyNTQ1MTEiLCJ0eXBlIjoiYXBpX2tleSIsImFwaV9rZXlfaWQiOiI2ZTE0M2ZmYy0yZDM4LTQ3ZWUtOTkwZS1kMjNiMWI2YWRjMjYiLCJpYXQiOjE3ODQ1MzQ5OTl9.ThZGmGpG-JpfkssAEIs5BceympRLTyzSzmP4JUg_34rIAyjDj56bi0ZeU-ZVLxq5qCqTa-KhC4oZtAuAH-mNyxV4bKhnjAmMW0xY0NRBpqKYQgvKrOiZcI6YHl5QBLsgcPJJHySX8LPrjs3lRGPhi4tckOGFFowpc4SfWWCK7MJjFr1073GgFNOOcINCWigjjeJp6_pbWZpauoIyI7PcOur1Qdgq4Zi27eeV4mzH26uhDINSfGTduqdPwkyibLURkvCTY6ewDffowoU4uidVaqR7lVAdg9Sh3915gHozMojFPsKAnq866Wqd09t_F8X634VZ9pi9KEpuj6wgjOy4VgyLypa8vII8yx8JNXW5RhT79kz6rrKM-ch8sakKKNn8cbgEXmlQHQWpz1BTaciHNpe79aeO934sj4OWChzXQjwPYj528xRdBXYkFQSPFLntNdKqcE7DchErd1m3BIXJPppyMQAHVF5OZ2kmlvBed4zIBs6nJa9fTACiZHxKNt3-';
-const AGENT_ID = '527552f9-53b4-46fc-b7e8-370934b4bcd4';
+const API_TOKEN = process.env.TIMEWEB_API_TOKEN;
+const AGENT_ID = process.env.TIMEWEB_AGENT_ID || '527552f9-53b4-46fc-b7e8-370934b4bcd4';
 const COMPLETIONS_URL = `https://agent.timeweb.cloud/api/v1/cloud-ai/agents/${AGENT_ID}/v1/chat/completions`;
+
+function getErrorMessage(data, fallback) {
+  const error = data?.error ?? data?.message ?? data?.detail;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const message = error.message ?? error.detail ?? error.error_description;
+    if (typeof message === 'string') return message;
+  }
+  return fallback;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -10,6 +20,9 @@ export default async function handler(req, res) {
   const { message, context } = req.body || {};
   if (!message) {
     return res.status(400).json({ error: 'Message is required' });
+  }
+  if (!API_TOKEN) {
+    return res.status(500).json({ error: 'Не настроен ключ ИИ-ассистента.' });
   }
 
   try {
@@ -40,9 +53,12 @@ export default async function handler(req, res) {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: getErrorMessage(data, `Сервис ассистента вернул ошибку ${response.status}.`) });
+    }
     return res.status(response.status).json(data);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Не удалось связаться с сервисом ассистента.' });
   }
 }
