@@ -9,6 +9,7 @@ const storageKeys = {
   userAge: 'moneypilot-user-age',
   savingsGoals: 'moneypilot-savings-goals',
   familyMembers: 'moneypilot-family-members',
+  familyExpenses: 'moneypilot-family-expenses',
   familyGoals: 'moneypilot-family-goals',
   suggestedItem: 'moneypilot-suggestedItem',
   savings: 'moneypilot-savings',
@@ -35,6 +36,12 @@ type FamilyGoal = {
   memberContributions?: Record<string, number>;
   isPaused?: boolean;
   activity?: Array<{ id: string; amount: number; date: string; memberId?: string }>;
+};
+
+type FamilyExpense = {
+  id: string;
+  name: string;
+  amount: number;
 };
 
 type SuggestedItem = {
@@ -89,6 +96,16 @@ function formatTargetDate(value?: string) {
   return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`));
 }
 
+function migrateLegacyFamilyExpenses() {
+  const members = readJson<FamilyMember[]>(storageKeys.familyMembers, []);
+  const expenses = readJson<FamilyExpense[]>(storageKeys.familyExpenses, []);
+  const legacyExpenses = members.filter(member => member.role === 'Расход');
+  if (legacyExpenses.length && expenses.length === 0) {
+    window.localStorage.setItem(storageKeys.familyExpenses, JSON.stringify(legacyExpenses.map(member => ({ id: member.id, name: member.name, amount: member.contribute }))));
+    window.localStorage.setItem(storageKeys.familyMembers, JSON.stringify(members.filter(member => member.role !== 'Расход')));
+  }
+}
+
 function migrateOldRetirement() {
   const oldAge = window.localStorage.getItem('moneypilot-retirement-age');
   const oldIncome = window.localStorage.getItem('moneypilot-retirement-income');
@@ -125,7 +142,13 @@ export default function SettingsPage() {
 
   const [members, setMembers] = useState<FamilyMember[]>(() => {
     if (typeof window === 'undefined') return [] as FamilyMember[];
+    migrateLegacyFamilyExpenses();
     return readJson(storageKeys.familyMembers, [] as FamilyMember[]);
+  });
+
+  const [familyExpenses, setFamilyExpenses] = useState<FamilyExpense[]>(() => {
+    if (typeof window === 'undefined') return [] as FamilyExpense[];
+    return readJson(storageKeys.familyExpenses, [] as FamilyExpense[]);
   });
 
   const [familyGoalsList, setFamilyGoalsList] = useState<FamilyGoal[]>(() => {
@@ -152,8 +175,9 @@ export default function SettingsPage() {
   });
 
   const [memberName, setMemberName] = useState('');
-  const [memberRole, setMemberRole] = useState('Доход');
   const [memberAmount, setMemberAmount] = useState('');
+  const [expenseName, setExpenseName] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
   const [familyGoalTitle, setFamilyGoalTitle] = useState('');
   const [familyGoalTarget, setFamilyGoalTarget] = useState('');
   const [familyGoalSavings, setFamilyGoalSavings] = useState('');
@@ -196,6 +220,11 @@ export default function SettingsPage() {
   const handleSaveMembers = (newMembers: FamilyMember[]) => {
     setMembers(newMembers);
     window.localStorage.setItem(storageKeys.familyMembers, JSON.stringify(newMembers));
+  };
+
+  const handleSaveFamilyExpenses = (newExpenses: FamilyExpense[]) => {
+    setFamilyExpenses(newExpenses);
+    window.localStorage.setItem(storageKeys.familyExpenses, JSON.stringify(newExpenses));
   };
 
   const handleSaveFamilyGoals = (newGoals: FamilyGoal[]) => {
@@ -295,25 +324,40 @@ export default function SettingsPage() {
   const handleAddMember = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(memberAmount);
-    if (!memberName.trim() || !Number.isFinite(parsed) || parsed < 0) {
-      setMessage('Для участника укажите имя и сумму.');
+    if (!memberName.trim() || !Number.isFinite(parsed) || parsed <= 0) {
+      setMessage('Для дохода укажите имя и сумму больше нуля.');
       return;
     }
     const next: FamilyMember = {
       id: `${Date.now()}-${memberName.trim()}`,
       name: memberName.trim(),
-      role: memberRole.trim(),
+      role: 'Доход',
       contribute: parsed,
       color: '#37c7ff',
     };
     handleSaveMembers([...members, next]);
     setMemberName('');
-    setMemberRole('Доход');
     setMemberAmount('');
   };
 
   const handleRemoveMember = (id: string) => {
     if (window.confirm('Удалить участника семьи?')) handleSaveMembers(members.filter(m => m.id !== id));
+  };
+
+  const handleAddFamilyExpense = (e: FormEvent) => {
+    e.preventDefault();
+    const amount = Number(expenseAmount);
+    if (!expenseName.trim() || !Number.isFinite(amount) || amount <= 0) {
+      setMessage('Для обязательного расхода укажите название и сумму больше нуля.');
+      return;
+    }
+    handleSaveFamilyExpenses([...familyExpenses, { id: `${Date.now()}-${expenseName.trim()}`, name: expenseName.trim(), amount }]);
+    setExpenseName('');
+    setExpenseAmount('');
+  };
+
+  const handleRemoveFamilyExpense = (id: string) => {
+    if (window.confirm('Удалить обязательный расход?')) handleSaveFamilyExpenses(familyExpenses.filter(expense => expense.id !== id));
   };
 
   const handleAddFamilyGoal = (e: FormEvent) => {
@@ -567,17 +611,17 @@ export default function SettingsPage() {
           <div className="settings-block">
             <div className="settings-block-head">
               <div>
-                <h4>Члены семьи</h4>
-                <p>Добавьте участников и их вклад в семейный бюджет.</p>
+                <h4>Доходы семьи</h4>
+                <p>Добавьте человека и его регулярный доход. Эти деньги формируют семейный бюджет.</p>
               </div>
-              <span className="mini-pill">{members.length} участников</span>
+              <span className="mini-pill">{members.length} источников</span>
             </div>
             <div className="settings-list">
               {members.length ? members.map(member => (
                 <div key={member.id} className="settings-row">
                   <div>
                     <strong>{member.name}</strong>
-                    <p>{member.role}</p>
+                    <p>Регулярный доход</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>{member.contribute.toLocaleString('ru-RU')} ₽</span>
@@ -585,14 +629,36 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )) : (
-                <div className="empty-cell">Пока нет членов семьи. Добавьте первого участника ниже.</div>
+                <div className="empty-cell">Пока нет доходов. Добавьте первый источник ниже.</div>
               )}
             </div>
             <form className="inline-form" onSubmit={handleAddMember}>
               <label><span className="sr-only">Имя участника</span><input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" /></label>
-              <label><span className="sr-only">Тип суммы</span><select value={memberRole} onChange={e => setMemberRole(e.target.value)}><option value="Доход">Доход</option><option value="Расход">Обязательный расход</option></select></label>
-              <label><span className="sr-only">Ежемесячная сумма</span><input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Ежемесячная сумма, ₽" type="number" inputMode="decimal" /></label>
-              <button type="submit">Добавить</button>
+              <label><span className="sr-only">Ежемесячный доход</span><input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Получает в месяц, ₽" type="number" inputMode="decimal" /></label>
+              <button type="submit">Добавить доход</button>
+            </form>
+          </div>
+
+          <div className="settings-block">
+            <div className="settings-block-head">
+              <div>
+                <h4>Обязательные расходы</h4>
+                <p>Ипотека, аренда, коммунальные услуги и другие регулярные платежи. Они вычитаются до распределения денег на цели.</p>
+              </div>
+              <span className="mini-pill">{familyExpenses.length} расходов</span>
+            </div>
+            <div className="settings-list">
+              {familyExpenses.length ? familyExpenses.map(expense => (
+                <div key={expense.id} className="settings-row">
+                  <div><strong>{expense.name}</strong><p>Ежемесячный обязательный расход</p></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span>−{formatCurrency(expense.amount)}</span><button type="button" className="text-button" onClick={() => handleRemoveFamilyExpense(expense.id)} aria-label={`Удалить ${expense.name}`}>Удалить</button></div>
+                </div>
+              )) : <div className="empty-cell">Пока нет обязательных расходов.</div>}
+            </div>
+            <form className="inline-form" onSubmit={handleAddFamilyExpense}>
+              <label><span className="sr-only">Название обязательного расхода</span><input value={expenseName} onChange={e => setExpenseName(e.target.value)} placeholder="Например, ипотека" /></label>
+              <label><span className="sr-only">Сумма обязательного расхода</span><input value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} placeholder="Сумма в месяц, ₽" type="number" inputMode="decimal" /></label>
+              <button type="submit">Добавить расход</button>
             </form>
           </div>
 

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 type FamilyMember = { id: string; name: string; role: string; contribute: number; };
+type FamilyExpense = { id: string; name: string; amount: number; };
 type GoalActivity = { id: string; amount: number; date: string; memberId?: string; };
 type FamilyGoal = {
   id: string; title: string; target: number; currentSavings?: number; targetDate?: string;
@@ -54,6 +55,7 @@ function getShares(goal: FamilyGoal, members: FamilyMember[], contribution: numb
 
 export default function FamilyPage() {
   const [members, setMembers] = useState<FamilyMember[]>(() => readJson('moneypilot-family-members', []));
+  const [familyExpenses, setFamilyExpenses] = useState<FamilyExpense[]>(() => readJson('moneypilot-family-expenses', []));
   const [goals, setGoals] = useState<FamilyGoal[]>(() => readJson('moneypilot-family-goals', []));
   const [contributionGoalId, setContributionGoalId] = useState<string | null>(null);
   const [contributionAmount, setContributionAmount] = useState('');
@@ -61,7 +63,7 @@ export default function FamilyPage() {
   const [contributionDate, setContributionDate] = useState(getToday());
 
   useEffect(() => {
-    const refresh = () => { setMembers(readJson('moneypilot-family-members', [])); setGoals(readJson('moneypilot-family-goals', [])); };
+    const refresh = () => { setMembers(readJson('moneypilot-family-members', [])); setFamilyExpenses(readJson('moneypilot-family-expenses', [])); setGoals(readJson('moneypilot-family-goals', [])); };
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, []);
@@ -72,8 +74,10 @@ export default function FamilyPage() {
   };
 
   const plan = useMemo(() => {
-    const income = members.filter(member => member.role === 'Доход').reduce((sum, member) => sum + member.contribute, 0);
-    const expenses = members.filter(member => member.role === 'Расход').reduce((sum, member) => sum + member.contribute, 0);
+    const incomeMembers = members.filter(member => member.role !== 'Расход');
+    const income = incomeMembers.reduce((sum, member) => sum + member.contribute, 0);
+    const legacyExpenses = members.filter(member => member.role === 'Расход').reduce((sum, member) => sum + member.contribute, 0);
+    const expenses = familyExpenses.reduce((sum, expense) => sum + expense.amount, legacyExpenses);
     const currentMonth = getToday().slice(0, 7);
     const goalPlans = goals.map(goal => {
       const currentSavings = goal.currentSavings ?? 0;
@@ -83,7 +87,7 @@ export default function FamilyPage() {
       const requiredMonthly = monthsLeft ? Math.ceil(remaining / monthsLeft) : null;
       const progress = goal.target > 0 ? Math.min(100, Math.round((currentSavings / goal.target) * 100)) : 0;
       const actualThisMonth = (goal.activity ?? []).filter(item => item.date.startsWith(currentMonth)).reduce((sum, item) => sum + item.amount, 0);
-      const shares = getShares(goal, members, plannedContribution);
+      const shares = getShares(goal, incomeMembers, plannedContribution);
       const planStatus = remaining === 0 ? 'done' : goal.isPaused ? 'paused' : requiredMonthly === null ? 'missing-date' : plannedContribution >= requiredMonthly ? 'on-track' : 'at-risk';
       const factStatus = goal.isPaused || remaining === 0 || plannedContribution === 0 ? 'not-applicable' : actualThisMonth >= plannedContribution ? 'funded' : 'missing';
       const projectedDate = formatProjectedDate(remaining, plannedContribution);
@@ -98,7 +102,7 @@ export default function FamilyPage() {
     const fund = goalPlans.reduce((sum, goal) => sum + goal.currentSavings, 0);
     const required = goalPlans.reduce((sum, goal) => sum + (goal.requiredMonthly ?? 0), 0);
     return { income, expenses, available: income - expenses, planned, actualThisMonth, fund, required, unallocated: income - expenses - planned, goalPlans };
-  }, [members, goals]);
+  }, [members, familyExpenses, goals]);
 
   const addContribution = (event: FormEvent, goal: FamilyGoal) => {
     event.preventDefault();
@@ -122,10 +126,11 @@ export default function FamilyPage() {
       </section>
 
       <section className="family-summary" aria-label="Сводка семейного бюджета">
-        <article className="card total-card income"><span>Свободно в месяц</span><strong>{formatCurrency(plan.available)}</strong><p>Доходы минус обязательные расходы.</p></article>
+        <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Регулярные поступления всех участников.</p></article>
+        <article className="card total-card expenses"><span>Обязательные расходы</span><strong>{formatCurrency(plan.expenses)}</strong><p>Вычитаются до распределения на цели.</p></article>
+        <article className="card total-card"><span>Свободно в месяц</span><strong>{formatCurrency(plan.available)}</strong><p>Доходы минус обязательные расходы.</p></article>
         <article className="card total-card"><span>Нужно для дедлайнов</span><strong>{formatCurrency(plan.required)}</strong><p>Запланировано {formatCurrency(plan.planned)}/мес.</p></article>
         <article className="card total-card"><span>Внесено в этом месяце</span><strong>{formatCurrency(plan.actualThisMonth)}</strong><p>Фактические пополнения фондов.</p></article>
-        <article className="card total-card"><span>Фонд семейных целей</span><strong>{formatCurrency(plan.fund)}</strong><p>Фактически накоплено.</p></article>
       </section>
 
       {nextGoal && <section className={`family-alert ${nextGoal.planStatus}`}><strong>{nextGoal.title}</strong><span>{nextGoal.planStatus === 'at-risk' ? `Не хватает ${formatCurrency(Math.max(0, (nextGoal.requiredMonthly ?? 0) - nextGoal.plannedContribution))}/мес до дедлайна.` : nextGoal.planStatus === 'missing-date' ? 'Укажите дедлайн, чтобы проверить выполнимость.' : `Ближайшая цель: ${formatDeadline(nextGoal.targetDate)}.`}</span></section>}
@@ -141,14 +146,14 @@ export default function FamilyPage() {
             <p className="settings-note">Осталось {formatCurrency(goal.remaining)}{goal.requiredMonthly ? ` · необходимо ${formatCurrency(goal.requiredMonthly)}/мес` : ''} · текущий темп: {goal.projectedDate}</p>
             <p className="settings-note">Вклад: {goal.shares.length ? goal.shares.map(share => `${share.name} ${formatCurrency(share.amount)}`).join(' · ') : 'участники не назначены'}</p>
             <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(goal.memberIds?.[0] ?? ''); }}>Пополнить</button><button type="button" className="text-link" onClick={() => togglePause(goal.id)}>{goal.isPaused ? 'Возобновить' : 'Пауза'}</button><Link className="text-link" to="/settings">Изменить план</Link></div>
-            {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value="">Без участника</option>{members.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /><button type="submit">Сохранить</button></form>}
+            {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /><button type="submit">Сохранить</button></form>}
           </article>
         ))}</div> : <div className="empty-cell">Добавьте семейную цель с накопленной суммой и дедлайном в <Link to="/settings">Настройках</Link>.</div>}
       </section>
 
       <section className="content-grid">
         <div className="card large"><h2>Активность фондов</h2>{activities.length ? <ul className="family-activity">{activities.map(item => <li key={item.id}><span>{formatDate(item.date)} · {item.goalTitle}{item.memberName ? ` · ${item.memberName}` : ''}</span><strong>+{formatCurrency(item.amount)}</strong></li>)}</ul> : <div className="empty-cell">Пополнения целей появятся здесь.</div>}</div>
-        <div className="card large"><h2>Участники бюджета</h2><div className="settings-list">{members.length ? members.map(member => <div key={member.id} className="settings-row"><div><strong>{member.name}</strong><p>{member.role === 'Доход' ? 'Ежемесячный доход' : 'Обязательный расход'}</p></div><strong>{member.role === 'Расход' ? '-' : '+'}{formatCurrency(member.contribute)}/мес</strong></div>) : <div className="empty-cell">Добавьте участников семьи в <Link to="/settings">Настройках</Link>.</div>}</div></div>
+        <div className="card large"><h2>Доходы семьи</h2><div className="settings-list">{members.filter(member => member.role !== 'Расход').length ? members.filter(member => member.role !== 'Расход').map(member => <div key={member.id} className="settings-row"><div><strong>{member.name}</strong><p>Регулярный доход</p></div><strong>+{formatCurrency(member.contribute)}/мес</strong></div>) : <div className="empty-cell">Добавьте источники дохода в <Link to="/settings">Настройках</Link>.</div>}</div></div>
       </section>
     </div>
   );
