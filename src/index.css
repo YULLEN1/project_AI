@@ -902,6 +902,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   stroke-width: 3;
   stroke-linecap: round;
 }
+.analytics-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.total-card { padding: 18px; }
+.total-card span { display: block; color: #b8cfe8; font-size: var(--font-size-sm); }
+.total-card strong { display: block; margin: 6px 0; font-size: var(--font-size-xl); }
+.total-card p { margin: 0; color: #8aa2ca; font-size: var(--font-size-xs); }
+.total-card.income strong { color: #9af7d0; }
+.total-card.expenses strong { color: #ffca7a; }
+.expense-breakdown { display: grid; grid-template-columns: minmax(180px, 0.8fr) minmax(200px, 1fr); gap: 20px; align-items: center; margin-top: 12px; }
+.pie-chart { width: min(100%, 240px); margin: auto; display: block; }
+.pie-chart path { stroke: rgba(5, 8, 22, 0.9); stroke-width: 2; }
+.pie-chart-center { fill: #0b1628; }
+.theme-light .pie-chart-center { fill: #fff; }
+.pie-chart-total { fill: #e8f2ff; font-size: 10px; font-weight: 700; }
+.pie-chart-caption { fill: #8aa2ca; font-size: 8px; }
+.theme-light .pie-chart-total { fill: #14223b; }
+.pie-legend { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.pie-legend li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: var(--font-size-sm); }
+.pie-legend li > span:first-child { width: 10px; height: 10px; border-radius: 50%; }
+.pie-legend strong { font-size: var(--font-size-sm); }
+.expense-history { max-height: 270px; overflow: auto; margin-top: 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-md); }
+.expense-history table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+.expense-history th, .expense-history td { padding: 10px 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); white-space: nowrap; }
+.expense-history th { position: sticky; top: 0; background: #101c31; color: #b8cfe8; font-weight: 600; }
+.expense-history td:last-child { text-align: right; color: #ffca7a; }
+.theme-light .total-card span, .theme-light .total-card p, .theme-light .expense-history th { color: #3a4d6e; }
+.theme-light .expense-history { border-color: rgba(32, 56, 88, 0.14); }
+.theme-light .expense-history th { background: #edf3fc; }
+.theme-light .expense-history th, .theme-light .expense-history td { border-color: rgba(32, 56, 88, 0.1); }
 
 .bars-stack {
   display: flex;
@@ -1065,6 +1093,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .topbar { flex-direction: column; align-items: flex-start; }
   .metric-card strong { font-size: 1.1rem; }
   .assistant-form textarea { min-height: 100px; }
+  .analytics-totals { grid-template-columns: 1fr; }
+  .expense-breakdown { grid-template-columns: 1fr; }
 }
 
 /* ── Responsive: ≤520px ── */

@@ -43,6 +43,14 @@ type ForecastPoint = {
   value: number;
 };
 
+type CategoryTotal = {
+  name: string;
+  amount: number;
+  color: string;
+};
+
+const CATEGORY_COLORS = ['#37c7ff', '#8b6dff', '#84f4c0', '#ffca7a', '#ff7f8f', '#64a4ff'];
+
 function readPurchases() {
   if (typeof window === 'undefined') return [] as Purchase[];
   const raw = window.localStorage.getItem('moneypilot-purchases');
@@ -172,6 +180,38 @@ function buildLinePath(points: ForecastPoint[]) {
   }).join(' ');
 }
 
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(`${value}T00:00:00`));
+}
+
+function PieChart({ categories, total }: { categories: CategoryTotal[]; total: number }) {
+  let startAngle = -90;
+  return (
+    <div className="expense-breakdown">
+      <svg viewBox="0 0 180 180" className="pie-chart" role="img" aria-label="Распределение расходов по категориям">
+        {categories.map(category => {
+          const angle = (category.amount / total) * 360;
+          const endAngle = startAngle + angle;
+          const start = { x: 90 + 70 * Math.cos((Math.PI * startAngle) / 180), y: 90 + 70 * Math.sin((Math.PI * startAngle) / 180) };
+          const end = { x: 90 + 70 * Math.cos((Math.PI * endAngle) / 180), y: 90 + 70 * Math.sin((Math.PI * endAngle) / 180) };
+          const largeArc = angle > 180 ? 1 : 0;
+          const path = angle === 360
+            ? 'M 90 20 A 70 70 0 1 1 89.99 20 Z'
+            : `M 90 90 L ${start.x} ${start.y} A 70 70 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+          startAngle = endAngle;
+          return <path key={category.name} d={path} fill={category.color}><title>{`${category.name}: ${formatCurrency(category.amount)}`}</title></path>;
+        })}
+        <circle cx="90" cy="90" r="42" className="pie-chart-center" />
+        <text x="90" y="86" textAnchor="middle" className="pie-chart-total">{formatCurrency(total)}</text>
+        <text x="90" y="104" textAnchor="middle" className="pie-chart-caption">расходы</text>
+      </svg>
+      <ul className="pie-legend">
+        {categories.map(category => <li key={category.name}><span style={{ background: category.color }} /><span>{category.name}</span><strong>{Math.round((category.amount / total) * 100)}%</strong></li>)}
+      </ul>
+    </div>
+  );
+}
+
 function ForecastChart({ points, label }: { points: ForecastPoint[]; label: string }) {
   const path = buildLinePath(points);
   const maxValue = Math.max(...points.map(point => point.value), 1);
@@ -229,6 +269,7 @@ export default function AnalyticsPage() {
     () => purchases.filter(item => rangeDates.includes(item.date)),
     [purchases, rangeDates],
   );
+  const configuredIncome = readNumber('moneypilot-income');
 
   const analytics = useMemo(() => {
     if (!filteredPurchases.length) return null;
@@ -253,6 +294,7 @@ export default function AnalyticsPage() {
         : 0;
 
     const budget = readNumber('moneypilot-budget') ?? 0;
+    const income = readNumber('moneypilot-income');
     const savings = readNumber('moneypilot-savings') ?? 0;
     const members = readJson<FamilyMember[]>('moneypilot-family-members', []);
     const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
@@ -318,7 +360,11 @@ export default function AnalyticsPage() {
             ? 'Второй по расходам'
             : 'Третья по расходам',
       })),
+      categories: sortedCategories.map(([name, amount], index) => ({ name, amount, color: CATEGORY_COLORS[index % CATEGORY_COLORS.length] })),
+      history: [...filteredPurchases].sort((a, b) => b.date.localeCompare(a.date)),
       total,
+      income,
+      estimatedBalance: income === null ? null : income - monthlyExpenses,
       trend,
       expenseChartPath,
       simpleForecast,
@@ -368,9 +414,46 @@ export default function AnalyticsPage() {
         )}
       </section>
 
+      <section className="analytics-totals" aria-label="Сводка поступлений и расходов">
+        <article className="card total-card income">
+          <span>Поступления в месяц</span>
+          <strong>{configuredIncome === null ? 'Не указаны' : formatCurrency(configuredIncome)}</strong>
+          <p>Берутся из поля «Месячный доход» в настройках.</p>
+        </article>
+        <article className="card total-card expenses">
+          <span>Расходы за период</span>
+          <strong>{analytics ? formatCurrency(analytics.total) : formatCurrency(0)}</strong>
+          <p>{range === 'today' ? 'Сегодня' : range === 'week' ? 'За выбранную неделю' : 'За выбранный месяц'}</p>
+        </article>
+        <article className="card total-card">
+          <span>Остаток по месячному темпу</span>
+          <strong>{configuredIncome === null ? 'Нет данных' : formatCurrency(configuredIncome - (analytics?.monthlyExpenses ?? 0))}</strong>
+          <p>{configuredIncome === null ? 'Укажите доход для расчёта.' : `Доход минус расчётные расходы ${formatCurrency(analytics?.monthlyExpenses ?? 0)}/мес.`}</p>
+        </article>
+      </section>
+
       <section className="period-summary">
         <p>Период данных: <strong>{range === 'today' ? 'Сегодня' : range === 'week' ? 'Неделя' : 'Месяц'}</strong>, выбранная дата <strong>{selectedDate}</strong>.</p>
       </section>
+
+      {analytics && (
+        <section className="content-grid">
+          <div className="card large reveal-card">
+            <h2>Структура расходов</h2>
+            <p className="settings-note">Круговая диаграмма по категориям за выбранный период.</p>
+            <PieChart categories={analytics.categories} total={analytics.total} />
+          </div>
+          <div className="card large reveal-card">
+            <div className="card-head"><h2>История расходов</h2><span>{analytics.history.length} операций</span></div>
+            <div className="expense-history" tabIndex={0} aria-label="История расходов">
+              <table>
+                <thead><tr><th>Дата</th><th>Покупка</th><th>Категория</th><th>Сумма</th></tr></thead>
+                <tbody>{analytics.history.map((item, index) => <tr key={`${item.date}-${item.title}-${index}`}><td>{formatDate(item.date)}</td><td>{item.title}</td><td>{item.category}</td><td>{formatCurrency(item.amount)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="content-grid">
         <div className="card large reveal-card">
