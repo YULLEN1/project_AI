@@ -740,6 +740,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   box-shadow: 0 10px 24px rgba(55, 199, 255, 0.16);
 }
 .dashboard-decision { border-color: rgba(55, 199, 255, 0.3); }
+.income-confidence-toggle { display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); color: #b8cfe8; }
+.income-confidence-toggle input { accent-color: var(--color-primary); }
+.theme-light .income-confidence-toggle { color: #2a3d5e; }
 .decision-amount { display: block; font-size: clamp(2rem, 4vw, 3.25rem); line-height: 1; color: #9af7d0; margin: 14px 0; }
 .hero-action { padding: 11px 16px; border-radius: var(--radius-pill); background: var(--color-primary); color: #04111e; font-weight: 700; text-decoration: none; white-space: nowrap; }
 

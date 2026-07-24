@@ -10,6 +10,16 @@ type Purchase = {
   date: string;
 };
 
+type IncomeEvent = {
+  id: string;
+  source: string;
+  amount: number;
+  date: string;
+  status: 'expected' | 'received';
+  confidence: 'confirmed' | 'likely';
+  recurrence: 'once' | 'monthly';
+};
+
 function readPurchases() {
   if (typeof window === 'undefined') return [] as Purchase[];
   const raw = window.localStorage.getItem('moneypilot-purchases');
@@ -32,11 +42,12 @@ function getBaseBudget() {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function getDaysToSalary() {
-  if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem('moneypilot-daysToSalary');
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value > 0 ? value : null;
+function readIncomeEvents() {
+  if (typeof window === 'undefined') return [] as IncomeEvent[];
+  const raw = window.localStorage.getItem('moneypilot-income-events');
+  if (!raw) return [];
+  try { return JSON.parse(raw) as IncomeEvent[]; }
+  catch { return []; }
 }
 
 function getSavedRange() {
@@ -112,6 +123,22 @@ function getToday() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+function getNextIncome(events: IncomeEvent[], fromDate: string, includeLikely: boolean) {
+  const base = new Date(`${fromDate}T00:00:00`);
+  return events.flatMap(event => {
+    if (event.status !== 'expected' || (!includeLikely && event.confidence === 'likely')) return [];
+    if (event.recurrence !== 'monthly') return event.date >= fromDate ? [event] : [];
+    const original = new Date(`${event.date}T00:00:00`);
+    const date = new Date(base.getFullYear(), base.getMonth(), Math.min(original.getDate(), new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()));
+    if (date < base) date.setMonth(date.getMonth() + 1);
+    return [{ ...event, date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }];
+  }).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
+}
+
+function daysBetween(fromDate: string, toDate: string) {
+  return Math.max(0, Math.round((new Date(`${toDate}T00:00:00`).getTime() - new Date(`${fromDate}T00:00:00`).getTime()) / 86400000));
+}
+
 function getSavedSuggestion() {
   if (typeof window === 'undefined') return { name: '', price: 0 };
   const raw = window.localStorage.getItem('moneypilot-suggestedItem');
@@ -166,6 +193,7 @@ export default function DashboardPage() {
   const [formSuccess, setFormSuccess] = useState('');
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
   const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
+  const [includeLikelyIncome, setIncludeLikelyIncome] = useState(false);
   const suggestion = getSavedSuggestion();
   const savings = getSavedSavings();
 
@@ -180,7 +208,9 @@ export default function DashboardPage() {
 
 
   const baseBudget = getBaseBudget();
-  const daysToSalary = getDaysToSalary();
+  const incomeEvents = readIncomeEvents();
+  const nextIncome = useMemo(() => getNextIncome(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
+  const daysToIncome = nextIncome ? daysBetween(selectedDate, nextIncome.date) : null;
   const rangeDates = useMemo(() => getRangeDates(selectedDate, range), [selectedDate, range]);
   const filteredPurchases = useMemo(
     () => purchases.filter(item => rangeDates.includes(item.date)),
@@ -188,7 +218,7 @@ export default function DashboardPage() {
   );
   const totalSpent = useMemo(() => filteredPurchases.reduce((sum, item) => sum + item.amount, 0), [filteredPurchases]);
   const remainingBudget = baseBudget !== null ? baseBudget - totalSpent : 0;
-  const dailyBudget = baseBudget !== null && daysToSalary !== null ? Math.max(0, remainingBudget / daysToSalary) : 0;
+  const dailyBudget = baseBudget !== null && daysToIncome !== null ? Math.max(0, remainingBudget / Math.max(1, daysToIncome)) : 0;
   const healthScore = baseBudget !== null && filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
   const lastPurchase = purchases[purchases.length - 1];
@@ -232,18 +262,19 @@ export default function DashboardPage() {
       <section className="hero-panel dashboard-decision">
         <div className="hero-copy">
           <p className="eyebrow">Финансовый ориентир</p>
-          <h2>{baseBudget !== null && daysToSalary !== null ? 'Можно потратить сегодня' : 'Настройте финансовый план'}</h2>
-          {baseBudget !== null && daysToSalary !== null ? (
+          <h2>{baseBudget !== null && nextIncome ? 'Можно потратить сегодня' : 'Добавьте ближайшее поступление'}</h2>
+          {baseBudget !== null && nextIncome ? (
             <>
               <strong className="decision-amount">{formatCurrency(Math.round(dailyBudget))}</strong>
-              <p>До следующего дохода {daysToSalary} дн. В месячном лимите осталось {formatCurrency(Math.max(0, remainingBudget))}.</p>
+              <p>Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · {daysToIncome === 0 ? 'сегодня' : `через ${daysToIncome} дн.`}. В лимите осталось {formatCurrency(Math.max(0, remainingBudget))}.</p>
             </>
           ) : (
-            <p>Укажите месячный лимит и дни до следующего дохода, чтобы получить безопасный дневной ориентир.</p>
+            <p>Укажите месячный лимит и добавьте подтверждённое поступление в настройках, чтобы получить безопасный дневной ориентир.</p>
           )}
         </div>
-        <Link className="hero-action" to="/settings">{baseBudget === null || daysToSalary === null ? 'Настроить план' : 'Изменить план'}</Link>
+        <Link className="hero-action" to="/settings">{baseBudget === null || !nextIncome ? 'Добавить поступление' : 'Изменить план'}</Link>
       </section>
+      {incomeEvents.some(event => event.status === 'expected' && event.confidence === 'likely') && <label className="income-confidence-toggle"><input type="checkbox" checked={includeLikelyIncome} onChange={e => setIncludeLikelyIncome(e.target.checked)} /> Учитывать вероятные поступления в ориентире</label>}
 
       <section className="widget-tabs" aria-label="Временные показатели">
         {[
@@ -280,7 +311,7 @@ export default function DashboardPage() {
       <section className="metrics-grid">
         <article className="metric-card primary">
           <span>До следующего дохода</span>
-          <strong>{daysToSalary !== null ? `${daysToSalary} дней` : 'Не задано'}</strong>
+          <strong>{nextIncome ? (daysToIncome === 0 ? 'Сегодня' : `${daysToIncome} дней`) : 'Нет поступлений'}</strong>
           <div className="spark-line">
             <span style={{ width: '70%' }} />
             <span style={{ width: '45%' }} />
@@ -289,7 +320,7 @@ export default function DashboardPage() {
         </article>
         <article className="metric-card">
           <span>Дневной ориентир</span>
-          <strong>{baseBudget !== null && daysToSalary !== null ? formatCurrency(Math.round(dailyBudget)) : 'Настройте данные'}</strong>
+          <strong>{baseBudget !== null && nextIncome ? formatCurrency(Math.round(dailyBudget)) : 'Настройте данные'}</strong>
           {baseBudget !== null && filteredPurchases.length > 0 ? (
             <div className="mini-pill">
               {(() => {
@@ -305,10 +336,10 @@ export default function DashboardPage() {
         <article className="metric-card">
           <span>Уже потрачено</span>
           <strong>{formatCurrency(totalSpent)}</strong>
-          {baseBudget !== null && daysToSalary !== null && totalSpent > 0 ? (
+          {baseBudget !== null && daysToIncome !== null && totalSpent > 0 ? (
             <div className="mini-pill warning">
               {(() => {
-                const budgetForPeriod = (baseBudget / (daysToSalary + rangeDates.filter(d => d <= getToday()).length)) * rangeDates.filter(d => d <= getToday()).length;
+                const budgetForPeriod = (baseBudget / (Math.max(1, daysToIncome) + rangeDates.filter(d => d <= selectedDate).length)) * rangeDates.filter(d => d <= selectedDate).length;
                 const pct = Math.round(((totalSpent - budgetForPeriod) / Math.max(1, budgetForPeriod)) * 100);
                 return pct > 0 ? `${pct}% выше плана` : `${Math.abs(pct)}% ниже плана`;
               })()}
@@ -360,11 +391,11 @@ export default function DashboardPage() {
               <tbody>{chartPoints.map(point => <tr key={point.date}><th scope="row">{formatDateLabel(point.date)}</th><td>{formatCurrency(point.total)}</td></tr>)}</tbody>
             </table>
             <div className="chart-tooltip">
-              {baseBudget !== null && daysToSalary !== null
+              {baseBudget !== null && nextIncome
                 ? (filteredPurchases.length
                   ? `Итого ${formatCurrency(totalSpent)} за выбранный период`
                   : 'Добавьте расходы в выбранный диапазон')
-                : 'Установите бюджет и дни до зарплаты в настройках'}
+                : 'Установите лимит и добавьте поступление в настройках'}
             </div>
           </div>
         </div>
@@ -377,9 +408,9 @@ export default function DashboardPage() {
               : 'Добавьте первую покупку.'}
           </p>
           <p>
-            {baseBudget !== null && daysToSalary !== null
+            {baseBudget !== null && nextIncome
               ? <>Если сегодня не покупать ничего лишнего, к концу периода останется <strong>{formatCurrency(Math.max(0, remainingBudget))}</strong>.</>
-              : 'Установите бюджет и дни до зарплаты в настройках.'}
+              : 'Установите лимит и добавьте поступление в настройках.'}
           </p>
           <form className="inline-form purchase-form" onSubmit={handleSubmit} noValidate>
             <label><span className="sr-only">Название покупки</span><input aria-invalid={Boolean(formError)} value={title} onChange={e => { setTitle(e.target.value); setCategory(detectCategory(e.target.value)); }} placeholder="Что купили?" /></label>

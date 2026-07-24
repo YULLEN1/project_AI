@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useState } from 'react';
 const storageKeys = {
   budget: 'moneypilot-budget',
   income: 'moneypilot-income',
-  salaryDays: 'moneypilot-daysToSalary',
+  incomeEvents: 'moneypilot-income-events',
   notifications: 'moneypilot-notifications',
   purchases: 'moneypilot-purchases',
   userAge: 'moneypilot-user-age',
@@ -21,6 +21,16 @@ type FamilyMember = {
   role: string;
   contribute: number;
   color: string;
+};
+
+type IncomeEvent = {
+  id: string;
+  source: string;
+  amount: number;
+  date: string;
+  status: 'expected' | 'received';
+  confidence: 'confirmed' | 'likely';
+  recurrence: 'once' | 'monthly';
 };
 
 type FamilyGoal = {
@@ -62,7 +72,7 @@ type SavingsGoal = {
   currentSavings: number;
 };
 
-type SettingsTab = 'general' | 'goals' | 'family' | 'extras';
+type SettingsTab = 'general' | 'income' | 'goals' | 'family' | 'extras';
 
 function readBoolean(key: string, fallback: boolean) {
   const raw = window.localStorage.getItem(key);
@@ -135,10 +145,13 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [budget, setBudget] = useState<number | null>(null);
   const [income, setIncome] = useState<number | null>(null);
-  const [salaryDays, setSalaryDays] = useState<number | null>(null);
   const [userAge, setUserAge] = useState<number | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [message, setMessage] = useState('');
+  const [incomeEvents, setIncomeEvents] = useState<IncomeEvent[]>(() => {
+    if (typeof window === 'undefined') return [] as IncomeEvent[];
+    return readJson<IncomeEvent[]>(storageKeys.incomeEvents, []);
+  });
 
   const [members, setMembers] = useState<FamilyMember[]>(() => {
     if (typeof window === 'undefined') return [] as FamilyMember[];
@@ -178,6 +191,12 @@ export default function SettingsPage() {
   const [memberAmount, setMemberAmount] = useState('');
   const [expenseName, setExpenseName] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
+  const [incomeSource, setIncomeSource] = useState('');
+  const [incomeAmount, setIncomeAmount] = useState('');
+  const [incomeDate, setIncomeDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [incomeStatus, setIncomeStatus] = useState<IncomeEvent['status']>('expected');
+  const [incomeConfidence, setIncomeConfidence] = useState<IncomeEvent['confidence']>('confirmed');
+  const [incomeRecurrence, setIncomeRecurrence] = useState<IncomeEvent['recurrence']>('once');
   const [familyGoalTitle, setFamilyGoalTitle] = useState('');
   const [familyGoalTarget, setFamilyGoalTarget] = useState('');
   const [familyGoalSavings, setFamilyGoalSavings] = useState('');
@@ -202,12 +221,10 @@ export default function SettingsPage() {
   const [savingsInput, setSavingsInput] = useState(String(savings));
 
   const [budgetError, setBudgetError] = useState(false);
-  const [salaryDaysError, setSalaryDaysError] = useState(false);
 
   useEffect(() => {
     setBudget(readNumberOrNull(storageKeys.budget));
     setIncome(readNumberOrNull(storageKeys.income));
-    setSalaryDays(readNumberOrNull(storageKeys.salaryDays));
     setUserAge(readNumberOrNull(storageKeys.userAge));
     setNotifications(readBoolean(storageKeys.notifications, true));
   }, []);
@@ -237,18 +254,15 @@ export default function SettingsPage() {
     setMessage('');
 
     const hasBudgetError = budget === null || budget <= 0;
-    const hasSalaryError = salaryDays === null || salaryDays <= 0;
     setBudgetError(hasBudgetError);
-    setSalaryDaysError(hasSalaryError);
 
-    if (hasBudgetError || hasSalaryError) {
-      setMessage('Заполните обязательные поля: бюджет и дни до зарплаты.');
+    if (hasBudgetError) {
+      setMessage('Укажите месячный лимит расходов.');
       return;
     }
     window.localStorage.setItem(storageKeys.budget, String(budget));
     if (income !== null) window.localStorage.setItem(storageKeys.income, String(income));
     else window.localStorage.removeItem(storageKeys.income);
-    window.localStorage.setItem(storageKeys.salaryDays, String(salaryDays));
     if (userAge !== null) {
       window.localStorage.setItem(storageKeys.userAge, String(userAge));
     } else {
@@ -266,17 +280,14 @@ export default function SettingsPage() {
   const resetDefaults = () => {
     window.localStorage.removeItem(storageKeys.budget);
     window.localStorage.removeItem(storageKeys.income);
-    window.localStorage.removeItem(storageKeys.salaryDays);
     window.localStorage.removeItem(storageKeys.notifications);
     window.localStorage.removeItem(storageKeys.userAge);
     setBudget(null);
     setIncome(null);
-    setSalaryDays(null);
     setUserAge(null);
     setNotifications(true);
     setBudgetError(false);
-    setSalaryDaysError(false);
-    setMessage('Настройки сброшены. Заполните бюджет и дни до зарплаты.');
+    setMessage('Настройки сброшены. Укажите месячный лимит расходов.');
   };
 
   const handleAddGoal = (e: FormEvent) => {
@@ -445,8 +456,36 @@ export default function SettingsPage() {
     setMessage('Накопления сохранены.');
   };
 
+  const handleAddIncomeEvent = (e: FormEvent) => {
+    e.preventDefault();
+    const amount = Number(incomeAmount);
+    if (!incomeSource.trim() || !Number.isFinite(amount) || amount <= 0 || !incomeDate) {
+      setMessage('Для поступления укажите источник, сумму и дату.');
+      return;
+    }
+    const event: IncomeEvent = {
+      id: `${Date.now()}-${incomeSource.trim()}`,
+      source: incomeSource.trim(), amount, date: incomeDate, status: incomeStatus,
+      confidence: incomeStatus === 'received' ? 'confirmed' : incomeConfidence,
+      recurrence: incomeStatus === 'received' ? 'once' : incomeRecurrence,
+    };
+    const next = [...incomeEvents, event];
+    setIncomeEvents(next);
+    window.localStorage.setItem(storageKeys.incomeEvents, JSON.stringify(next));
+    setIncomeSource('');
+    setIncomeAmount('');
+    setMessage(incomeStatus === 'received' ? 'Поступление добавлено в журнал.' : 'Плановое поступление сохранено.');
+  };
+
+  const handleRemoveIncomeEvent = (id: string) => {
+    const next = incomeEvents.filter(event => event.id !== id);
+    setIncomeEvents(next);
+    window.localStorage.setItem(storageKeys.incomeEvents, JSON.stringify(next));
+  };
+
   const tabs: Array<{ key: SettingsTab; label: string }> = [
     { key: 'general', label: 'Основные' },
+    { key: 'income', label: 'Поступления' },
     { key: 'goals', label: 'Цели' },
     { key: 'family', label: 'Семья' },
     { key: 'extras', label: 'Дополнительно' },
@@ -499,7 +538,7 @@ export default function SettingsPage() {
             </label>
 
             <label>
-              Месячный доход
+              Ориентир дохода в месяц
               <input
                 type="number"
                 value={income ?? ''}
@@ -508,23 +547,7 @@ export default function SettingsPage() {
                 placeholder="Необязательно, например 120000 ₽"
                 inputMode="decimal"
               />
-              <small className="settings-note">Доход нужен для сценариев. Лимит расходов используется для дневного ориентира.</small>
-            </label>
-
-            <label>
-              Дней до следующего дохода <span style={{ color: 'var(--color-error)' }}>*</span>
-              <input
-                type="number"
-                value={salaryDays ?? ''}
-                onChange={e => {
-                  setSalaryDays(e.target.value ? Number(e.target.value) : null);
-                  setSalaryDaysError(false);
-                }}
-                min={1}
-                placeholder="Например, 18"
-                className={salaryDaysError ? 'input-error' : ''}
-                required
-              />
+              <small className="settings-note">Используется только для долгосрочных сценариев. Ближайшее поступление и дневной ориентир задаются во вкладке «Поступления».</small>
             </label>
 
             <label>
@@ -552,6 +575,26 @@ export default function SettingsPage() {
             </div>
 
           </form>
+        </section>
+      )}
+
+      {activeTab === 'income' && (
+        <section className="card large" id="settings-panel-income" role="tabpanel">
+          <div className="settings-block">
+            <div className="settings-block-head"><div><h4>План поступлений</h4><p>Для работы по найму добавьте аванс и зарплату с ежемесячным повторением. Для фриланса добавляйте ожидаемые поступления с уровнем уверенности.</p></div></div>
+            <form className="inline-form" onSubmit={handleAddIncomeEvent}>
+              <label><span className="sr-only">Источник поступления</span><input value={incomeSource} onChange={e => setIncomeSource(e.target.value)} placeholder="Например, аванс или проект Alpha" /></label>
+              <label><span className="sr-only">Сумма поступления</span><input value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)} type="number" inputMode="decimal" placeholder="Сумма, ₽" /></label>
+              <label><span className="sr-only">Дата поступления</span><input value={incomeDate} onChange={e => setIncomeDate(e.target.value)} type="date" /></label>
+              <label><span className="sr-only">Статус поступления</span><select value={incomeStatus} onChange={e => setIncomeStatus(e.target.value as IncomeEvent['status'])}><option value="expected">Ожидается</option><option value="received">Получено</option></select></label>
+              {incomeStatus === 'expected' && <><label><span className="sr-only">Уверенность поступления</span><select value={incomeConfidence} onChange={e => setIncomeConfidence(e.target.value as IncomeEvent['confidence'])}><option value="confirmed">Подтверждено</option><option value="likely">Вероятно</option></select></label><label><span className="sr-only">Повторяемость поступления</span><select value={incomeRecurrence} onChange={e => setIncomeRecurrence(e.target.value as IncomeEvent['recurrence'])}><option value="once">Разово</option><option value="monthly">Каждый месяц</option></select></label></>}
+              <button type="submit">Добавить</button>
+            </form>
+          </div>
+          <div className="settings-block">
+            <h4>Календарь и журнал поступлений</h4>
+            <div className="settings-list">{incomeEvents.length ? [...incomeEvents].sort((a, b) => b.date.localeCompare(a.date)).map(event => <div className="settings-row" key={event.id}><div><strong>{event.source}</strong><p>{event.status === 'received' ? 'Получено' : event.confidence === 'confirmed' ? 'Ожидается, подтверждено' : 'Ожидается, вероятно'} · {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${event.date}T00:00:00`))}{event.recurrence === 'monthly' ? ' · ежемесячно' : ''}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{formatCurrency(event.amount)}</strong><button className="text-button" type="button" onClick={() => handleRemoveIncomeEvent(event.id)}>Удалить</button></div></div>) : <div className="empty-cell">Добавьте первое ожидаемое или фактически полученное поступление.</div>}</div>
+          </div>
         </section>
       )}
 

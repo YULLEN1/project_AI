@@ -27,7 +27,7 @@ function collectContext() {
   return {
     currency: '₽ (рубли)',
     budget: readNumber('moneypilot-budget'),
-    salaryDays: readNumber('moneypilot-daysToSalary'),
+    incomeEvents: readJson('moneypilot-income-events', []),
     savings: readNumber('moneypilot-savings'),
     purchases: readJson('moneypilot-purchases', []),
     familyMembers: readJson('moneypilot-family-members', []),

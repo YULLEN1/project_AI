@@ -18,6 +18,16 @@ type FamilyGoal = {
   monthlyContribution?: number;
 };
 
+type IncomeEvent = {
+  id: string;
+  source: string;
+  amount: number;
+  date: string;
+  status: 'expected' | 'received';
+  confidence: 'confirmed' | 'likely';
+  recurrence: 'once' | 'monthly';
+};
+
 type SavingsGoal = {
   id: string;
   name: string;
@@ -289,6 +299,7 @@ export default function AnalyticsPage() {
         : 0;
 
     const income = readNumber('moneypilot-income');
+    const actualIncome = readJson<IncomeEvent[]>('moneypilot-income-events', []).filter(event => event.status === 'received' && rangeDates.includes(event.date)).reduce((sum, event) => sum + event.amount, 0);
     const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
     const userAge = readNumber('moneypilot-user-age');
     const savingsGoals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
@@ -355,6 +366,7 @@ export default function AnalyticsPage() {
       history: [...filteredPurchases].sort((a, b) => b.date.localeCompare(a.date)),
       total,
       income,
+      actualIncome,
       estimatedBalance: income === null ? null : income - monthlyExpenses,
       trend,
       expenseChartPath,
@@ -407,9 +419,9 @@ export default function AnalyticsPage() {
 
       <section className="analytics-totals" aria-label="Сводка поступлений и расходов">
         <article className="card total-card income">
-          <span>Поступления в месяц</span>
-          <strong>{configuredIncome === null ? 'Не указаны' : formatCurrency(configuredIncome)}</strong>
-          <p>Берутся из поля «Месячный доход» в настройках.</p>
+          <span>Поступления за период</span>
+          <strong>{analytics ? formatCurrency(analytics.actualIncome) : formatCurrency(0)}</strong>
+          <p>{analytics?.actualIncome ? 'Только фактически полученные поступления.' : 'Добавьте полученное поступление в настройках.'}</p>
         </article>
         <article className="card total-card expenses">
           <span>Расходы за период</span>
