@@ -590,6 +590,7 @@ export default function SettingsPage() {
               {incomeStatus === 'expected' && <><label><span className="sr-only">Уверенность поступления</span><select value={incomeConfidence} onChange={e => setIncomeConfidence(e.target.value as IncomeEvent['confidence'])}><option value="confirmed">Подтверждено</option><option value="likely">Вероятно</option></select></label><label><span className="sr-only">Повторяемость поступления</span><select value={incomeRecurrence} onChange={e => setIncomeRecurrence(e.target.value as IncomeEvent['recurrence'])}><option value="once">Разово</option><option value="monthly">Каждый месяц</option></select></label></>}
               <button type="submit">Добавить</button>
             </form>
+            <p className="settings-note">Статус «Получено» увеличивает доступные деньги на главной. «Ожидается» показывает будущее поступление, но не добавляется к текущему остатку.</p>
           </div>
           <div className="settings-block">
             <h4>Календарь и журнал поступлений</h4>
