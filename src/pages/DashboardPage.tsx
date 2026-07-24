@@ -381,7 +381,7 @@ export default function DashboardPage() {
               ? <>Если сегодня не покупать ничего лишнего, к концу периода останется <strong>{formatCurrency(Math.max(0, remainingBudget))}</strong>.</>
               : 'Установите бюджет и дни до зарплаты в настройках.'}
           </p>
-          <form className="inline-form" onSubmit={handleSubmit} noValidate>
+          <form className="inline-form purchase-form" onSubmit={handleSubmit} noValidate>
             <label><span className="sr-only">Название покупки</span><input aria-invalid={Boolean(formError)} value={title} onChange={e => { setTitle(e.target.value); setCategory(detectCategory(e.target.value)); }} placeholder="Что купили?" /></label>
             <label><span className="sr-only">Сумма в рублях</span><input aria-invalid={Boolean(formError)} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма, ₽" type="number" min="1" inputMode="decimal" /></label>
             <label><span className="sr-only">Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>

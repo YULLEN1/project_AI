@@ -783,6 +783,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .inline-form label { flex: 1; min-width: 140px; }
+.purchase-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(120px, 1fr)) auto;
+  align-items: start;
+}
+.purchase-form label { min-width: 0; }
+.purchase-form label > input, .purchase-form label > select { width: 100%; min-width: 0; }
 .form-feedback { margin: 10px 0 0; font-size: var(--font-size-sm); }
 .form-feedback.error { color: #ff9fa6; }
 .form-feedback.success { color: #9af7d0; }
@@ -1130,12 +1137,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .analytics-totals { grid-template-columns: 1fr; }
   .family-summary { grid-template-columns: 1fr 1fr; }
   .expense-breakdown { grid-template-columns: 1fr; }
+  .purchase-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .purchase-form button { grid-column: 1 / -1; }
 }
 
 /* ── Responsive: ≤520px ── */
 @media (max-width: 520px) {
   .metrics-grid { grid-template-columns: 1fr; }
   .inline-form { flex-direction: column; }
+  .purchase-form { grid-template-columns: 1fr; }
+  .purchase-form button { grid-column: auto; }
   .inline-form button { width: 100%; }
   .input-grid { flex-direction: column; }
   .calendar-day { min-width: 76px; flex: none; text-align: center; }
