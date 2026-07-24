@@ -42,6 +42,9 @@ type SavingsGoal = {
   type?: string;
   targetDate?: string;
   targetAge?: number;
+  monthlyPension?: number;
+  retirementAge?: number;
+  lifeExpectancy?: number;
   currentSavings: number;
 };
 
@@ -90,8 +93,9 @@ function migrateOldRetirement() {
       const goal: SavingsGoal = {
         id: 'retirement-migrated',
         name: 'Пенсия',
+        type: 'Пенсия',
         targetAmount: oldTarget ? Number(oldTarget) : 5000000,
-        targetAge: 60,
+        targetAge: oldAge ? Number(oldAge) : 60,
         currentSavings: oldSavings ? Number(oldSavings) : 0,
       };
       window.localStorage.setItem('moneypilot-savings-goals', JSON.stringify([goal]));
@@ -153,6 +157,9 @@ export default function SettingsPage() {
   const [goalAmount, setGoalAmount] = useState('');
   const [goalDate, setGoalDate] = useState('');
   const [goalSavings, setGoalSavings] = useState('');
+  const [monthlyPension, setMonthlyPension] = useState('');
+  const [retirementAge, setRetirementAge] = useState('60');
+  const [lifeExpectancy, setLifeExpectancy] = useState('95');
 
   const [suggestionName, setSuggestionName] = useState(suggestion.name);
   const [suggestionPrice, setSuggestionPrice] = useState(String(suggestion.price));
@@ -235,16 +242,28 @@ export default function SettingsPage() {
     e.preventDefault();
     const parsedAmount = Number(goalAmount);
     const parsedSavings = Number(goalSavings);
-    if (!goalName.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !goalDate) {
-      setMessage('Для цели укажите название, сумму и срок достижения.');
+    const parsedMonthlyPension = Number(monthlyPension);
+    const parsedRetirementAge = Number(retirementAge);
+    const parsedLifeExpectancy = Number(lifeExpectancy);
+    const isPension = goalType === 'Пенсия';
+    if (!goalName.trim() || (isPension
+      ? !Number.isFinite(parsedMonthlyPension) || parsedMonthlyPension <= 0 || !Number.isFinite(parsedRetirementAge) || !Number.isFinite(parsedLifeExpectancy) || parsedLifeExpectancy <= parsedRetirementAge
+      : !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !goalDate)) {
+      setMessage(isPension
+        ? 'Для пенсии укажите ежемесячную выплату, возраст выхода и ожидаемый возраст.'
+        : 'Для цели укажите название, сумму и срок достижения.');
       return;
     }
+    const pensionCapital = isPension ? parsedMonthlyPension * (parsedLifeExpectancy - parsedRetirementAge) * 12 : parsedAmount;
     const next: SavingsGoal = {
       id: `${Date.now()}-${goalName.trim()}`,
       name: goalName.trim(),
       type: goalType,
-      targetAmount: parsedAmount,
-      targetDate: goalDate,
+      targetAmount: pensionCapital,
+      targetDate: isPension ? undefined : goalDate,
+      retirementAge: isPension ? parsedRetirementAge : undefined,
+      lifeExpectancy: isPension ? parsedLifeExpectancy : undefined,
+      monthlyPension: isPension ? parsedMonthlyPension : undefined,
       currentSavings: Number.isFinite(parsedSavings) && parsedSavings > 0 ? parsedSavings : 0,
     };
     handleSaveSavingsGoals([...savingsGoals, next]);
@@ -252,6 +271,7 @@ export default function SettingsPage() {
     setGoalAmount('');
     setGoalDate('');
     setGoalSavings('');
+    setMonthlyPension('');
   };
 
   const handleRemoveGoal = (id: string) => {
@@ -462,7 +482,7 @@ export default function SettingsPage() {
                   <div key={goal.id} className="settings-row">
                     <div>
                       <strong>{goal.name} <span className="goal-type">{goal.type ?? 'Пенсия'}</span></strong>
-                      <p>{formatCurrency(goal.targetAmount)} · {goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : `к ${goal.targetAge ?? 'неизвестному'} годам`}</p>
+                      <p>{goal.monthlyPension ? `${formatCurrency(goal.monthlyPension)}/мес до ${goal.lifeExpectancy} лет · выход в ${goal.retirementAge} лет` : `${formatCurrency(goal.targetAmount)} · ${goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : `к ${goal.targetAge ?? 'неизвестному'} годам`}`}</p>
                     </div>
                     <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)} aria-label={`Удалить ${goal.name}`}>Удалить</button>
                   </div>
@@ -474,12 +494,22 @@ export default function SettingsPage() {
             <form className="inline-form" onSubmit={handleAddGoal}>
               <label><span className="sr-only">Тип цели</span><select value={goalType} onChange={e => setGoalType(e.target.value as typeof GOAL_TYPES[number])}>{GOAL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
               <label><span className="sr-only">Название цели</span><input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Например, отпуск в Японии" /></label>
-              <label><span className="sr-only">Сумма цели</span><input value={goalAmount} onChange={e => setGoalAmount(e.target.value)} placeholder="Сколько нужно, ₽" type="number" inputMode="decimal" /></label>
-              <label><span className="sr-only">Срок достижения цели</span><input value={goalDate} onChange={e => setGoalDate(e.target.value)} aria-label="Срок достижения цели" type="month" min={new Date().toISOString().slice(0, 7)} /></label>
+              {goalType === 'Пенсия' ? (
+                <>
+                  <label><span className="sr-only">Желаемая пенсия в месяц</span><input value={monthlyPension} onChange={e => setMonthlyPension(e.target.value)} placeholder="Пенсия в месяц, ₽" type="number" inputMode="decimal" /></label>
+                  <label><span className="sr-only">Возраст выхода на пенсию</span><input value={retirementAge} onChange={e => setRetirementAge(e.target.value)} placeholder="Выход на пенсию, лет" type="number" min="1" /></label>
+                  <label><span className="sr-only">До какого возраста планировать</span><input value={lifeExpectancy} onChange={e => setLifeExpectancy(e.target.value)} placeholder="Планировать до, лет" type="number" min="1" /></label>
+                </>
+              ) : (
+                <>
+                  <label><span className="sr-only">Сумма цели</span><input value={goalAmount} onChange={e => setGoalAmount(e.target.value)} placeholder="Сколько нужно, ₽" type="number" inputMode="decimal" /></label>
+                  <label><span className="sr-only">Срок достижения цели</span><input value={goalDate} onChange={e => setGoalDate(e.target.value)} aria-label="Срок достижения цели" type="month" min={new Date().toISOString().slice(0, 7)} /></label>
+                </>
+              )}
               <label><span className="sr-only">Текущие накопления</span><input value={goalSavings} onChange={e => setGoalSavings(e.target.value)} placeholder="Уже есть, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить</button>
             </form>
-            <p className="settings-note">План взносов для каждой цели появится в разделе «Цели накоплений».</p>
+            <p className="settings-note">Для пенсии капитал считается как ежемесячная выплата на весь срок после выхода на пенсию. Доходность и инфляция не учитываются.</p>
           </div>
         </section>
       )}

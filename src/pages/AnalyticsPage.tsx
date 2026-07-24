@@ -26,9 +26,13 @@ type FamilyGoal = {
 type SavingsGoal = {
   id: string;
   name: string;
+  type?: string;
   targetAmount: number;
   targetDate?: string;
   targetAge?: number;
+  monthlyPension?: number;
+  retirementAge?: number;
+  lifeExpectancy?: number;
   currentSavings: number;
 };
 
@@ -123,14 +127,40 @@ function readNumber(key: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function getMonthsUntil(targetDate?: string, targetAge?: number, userAge?: number | null) {
+function getPensionDetails(goal: SavingsGoal) {
+  const isPension = goal.monthlyPension || goal.type === 'Пенсия' || goal.name.trim().toLowerCase() === 'пенсия';
+  if (!isPension) return null;
+  return {
+    monthlyPension: goal.monthlyPension ?? goal.targetAmount,
+    retirementAge: goal.retirementAge ?? goal.targetAge ?? 60,
+    lifeExpectancy: goal.lifeExpectancy ?? 95,
+  };
+}
+
+function getMonthsUntil(goal: SavingsGoal, userAge?: number | null) {
+  const pension = getPensionDetails(goal);
+  if (pension && userAge) {
+    const months = (pension.retirementAge - userAge) * 12;
+    return months > 0 ? months : null;
+  }
+  const { targetDate, targetAge } = goal;
   if (targetDate) {
     const now = new Date();
     const target = new Date(`${targetDate}T00:00:00`);
-    return Math.max(1, (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth());
+    const months = (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth();
+    return months > 0 ? months : null;
   }
-  if (targetAge && userAge) return Math.max(1, (targetAge - userAge) * 12);
+  if (targetAge && userAge) {
+    const months = (targetAge - userAge) * 12;
+    return months > 0 ? months : null;
+  }
   return null;
+}
+
+function getTargetAmount(goal: SavingsGoal) {
+  const pension = getPensionDetails(goal);
+  if (pension) return pension.monthlyPension * Math.max(0, pension.lifeExpectancy - pension.retirementAge) * 12;
+  return goal.targetAmount;
 }
 
 function buildLinePath(points: ForecastPoint[]) {
@@ -256,10 +286,11 @@ export default function AnalyticsPage() {
     let retirementForecastPoints: ForecastPoint[] = [];
     if (savingsGoals.length > 0) {
       const retirementPlans = savingsGoals.flatMap(goal => {
-        const monthsLeft = getMonthsUntil(goal.targetDate, goal.targetAge, userAge);
+        const monthsLeft = getMonthsUntil(goal, userAge);
         if (!monthsLeft) return [];
-        const remaining = Math.max(0, goal.targetAmount - goal.currentSavings);
-        return { ...goal, monthsLeft, monthly: Math.ceil(remaining / monthsLeft) };
+        const targetAmount = getTargetAmount(goal);
+        const remaining = Math.max(0, targetAmount - goal.currentSavings);
+        return { ...goal, targetAmount, monthsLeft, monthly: Math.ceil(remaining / monthsLeft) };
       });
       if (retirementPlans.length > 0) {
         retirementMonthly = retirementPlans.reduce((sum, goal) => sum + goal.monthly, 0);
