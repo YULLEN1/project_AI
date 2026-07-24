@@ -139,16 +139,21 @@ function daysBetween(fromDate: string, toDate: string) {
   return Math.max(0, Math.round((new Date(`${toDate}T00:00:00`).getTime() - new Date(`${fromDate}T00:00:00`).getTime()) / 86400000));
 }
 
-function getIncomeScheduledToDate(events: IncomeEvent[], selectedDate: string, includeLikely: boolean) {
+function getActualIncomeToDate(events: IncomeEvent[], selectedDate: string) {
+  const monthKey = selectedDate.slice(0, 7);
+  return events.filter(event => event.status === 'received' && event.date.startsWith(monthKey) && event.date <= selectedDate).reduce((sum, event) => sum + event.amount, 0);
+}
+
+function getPlannedIncomeForMonth(events: IncomeEvent[], selectedDate: string, includeLikely: boolean) {
   const monthKey = selectedDate.slice(0, 7);
   return events.reduce((sum, event) => {
-    if (event.status === 'received') return event.date.startsWith(monthKey) && event.date <= selectedDate ? sum + event.amount : sum;
+    if (event.status === 'received') return event.date.startsWith(monthKey) ? sum + event.amount : sum;
     if (!includeLikely && event.confidence === 'likely') return sum;
-    if (event.recurrence === 'once') return event.date.startsWith(monthKey) && event.date <= selectedDate ? sum + event.amount : sum;
+    if (event.recurrence === 'once') return event.date.startsWith(monthKey) ? sum + event.amount : sum;
     const original = new Date(`${event.date}T00:00:00`);
     const selected = new Date(`${selectedDate}T00:00:00`);
     const occurrence = new Date(selected.getFullYear(), selected.getMonth(), Math.min(original.getDate(), new Date(selected.getFullYear(), selected.getMonth() + 1, 0).getDate()));
-    return occurrence <= selected ? sum + event.amount : sum;
+    return occurrence ? sum + event.amount : sum;
   }, 0);
 }
 
@@ -232,11 +237,15 @@ export default function DashboardPage() {
   const totalSpent = useMemo(() => filteredPurchases.reduce((sum, item) => sum + item.amount, 0), [filteredPurchases]);
   const monthKey = selectedDate.slice(0, 7);
   const monthSpent = useMemo(() => purchases.filter(item => item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [purchases, monthKey, selectedDate]);
-  const scheduledIncomeToDate = useMemo(() => getIncomeScheduledToDate(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
+  const actualIncomeToDate = useMemo(() => getActualIncomeToDate(incomeEvents, selectedDate), [incomeEvents, selectedDate]);
+  const plannedIncomeForMonth = useMemo(() => getPlannedIncomeForMonth(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
   const remainingBudget = baseBudget !== null ? baseBudget - monthSpent : 0;
-  const availableCash = Math.max(0, scheduledIncomeToDate - monthSpent);
+  const availableCash = Math.max(0, actualIncomeToDate - monthSpent);
   const spendableBeforeIncome = Math.min(Math.max(0, remainingBudget), availableCash);
   const dailyBudget = baseBudget !== null && daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
+  const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);
+  const plannedMonthBalance = Math.min(Math.max(0, remainingBudget), Math.max(0, plannedIncomeForMonth - monthSpent));
+  const plannedDailyBudget = plannedMonthBalance / daysLeftInMonth;
   const healthScore = baseBudget !== null && filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
   const lastPurchase = purchases[purchases.length - 1];
@@ -284,7 +293,7 @@ export default function DashboardPage() {
           {baseBudget !== null && nextIncome ? (
             <>
               <strong className="decision-amount">{formatCurrency(Math.round(dailyBudget))}</strong>
-              <p>По графику до выбранной даты поступит {formatCurrency(scheduledIncomeToDate)}. Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · через {daysToIncome} дн. Доступно до него: {formatCurrency(spendableBeforeIncome)}.</p>
+              <p>Фактически получено: {formatCurrency(actualIncomeToDate)}. Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · через {daysToIncome} дн. Доступно до него: {formatCurrency(spendableBeforeIncome)}.</p>
             </>
           ) : (
             <p>Укажите месячный лимит и добавьте подтверждённое поступление в настройках, чтобы получить безопасный дневной ориентир.</p>
@@ -348,18 +357,18 @@ export default function DashboardPage() {
               })()}
             </div>
           ) : (
-            <div className="mini-pill">По графику поступлений</div>
+            <div className="mini-pill">По фактически полученным деньгам</div>
           )}
         </article>
         <article className="metric-card">
           <span>Потрачено в этом месяце</span>
           <strong>{formatCurrency(monthSpent)}</strong>
-          {scheduledIncomeToDate > 0 ? (
+          {actualIncomeToDate > 0 ? (
             <div className="mini-pill warning">
-              {Math.round((monthSpent / scheduledIncomeToDate) * 100)}% от поступлений по графику
+              {Math.round((monthSpent / actualIncomeToDate) * 100)}% от полученных поступлений
             </div>
           ) : (
-            <div className="mini-pill">Нет поступлений по графику</div>
+            <div className="mini-pill">Нет полученных поступлений</div>
           )}
         </article>
         <article className="metric-card">
@@ -367,11 +376,16 @@ export default function DashboardPage() {
           <strong>{baseBudget !== null && nextIncome ? formatCurrency(spendableBeforeIncome) : 'Настройте данные'}</strong>
           {baseBudget !== null && nextIncome ? (
             <div className={`mini-pill ${spendableBeforeIncome > 0 ? 'good' : 'warning'}`}>
-              {scheduledIncomeToDate === 0 ? 'До выбранной даты нет поступлений по графику' : `${formatCurrency(spendableBeforeIncome)} до следующего дохода`}
+              {actualIncomeToDate === 0 ? 'Нет полученных поступлений в этом месяце' : `${formatCurrency(spendableBeforeIncome)} до следующего дохода`}
             </div>
           ) : (
             <div className="mini-pill">Через настройки</div>
           )}
+        </article>
+        <article className="metric-card">
+          <span>По плану до конца месяца</span>
+          <strong>{formatCurrency(plannedMonthBalance)}</strong>
+          <div className="mini-pill good">{formatCurrency(Math.round(plannedDailyBudget))}/день по графику поступлений</div>
         </article>
         <article className="metric-card">
           <span>Накопления</span>
