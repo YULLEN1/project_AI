@@ -943,6 +943,54 @@ button, .nav-item, .card, .metric-card, .hero-panel { transition: all var(--tran
 .forecast-box strong { display: block; font-size: 1.8rem; margin: 6px 0; }
 .forecast-box span { color: #8fd4ff; }
 
+.forecast-chart {
+  margin-top: 18px;
+  padding: 12px 10px 8px;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+.forecast-chart svg {
+  display: block;
+  width: 100%;
+  height: 132px;
+  overflow: visible;
+}
+.forecast-grid-line {
+  fill: none;
+  stroke: rgba(143, 212, 255, 0.16);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+.forecast-line {
+  fill: none;
+  stroke: #84f4c0;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.forecast-chart circle {
+  fill: #84f4c0;
+  stroke: #0b1a29;
+  stroke-width: 2;
+}
+.forecast-chart-labels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  color: #8aa2ca;
+  font-size: var(--font-size-xs);
+}
+.forecast-chart-labels span { text-align: center; }
+.forecast-chart-labels span:first-child { text-align: left; }
+.forecast-chart-labels span:last-child { text-align: right; }
+.theme-light .forecast-chart {
+  background: rgba(21, 52, 91, 0.045);
+  border-color: rgba(32, 56, 88, 0.12);
+}
+.theme-light .forecast-grid-line { stroke: rgba(26, 78, 192, 0.18); }
+.theme-light .forecast-chart circle { stroke: white; }
+.theme-light .forecast-chart-labels { color: #3a4d6e; }
+
 .input-grid label {
   display: flex;
   flex-direction: column;

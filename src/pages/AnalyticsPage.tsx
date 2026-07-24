@@ -33,6 +33,11 @@ type SavingsGoal = {
 
 type ForecastType = 'simple' | 'goals' | 'retirement';
 
+type ForecastPoint = {
+  year: number;
+  value: number;
+};
+
 function readPurchases() {
   if (typeof window === 'undefined') return [] as Purchase[];
   const raw = window.localStorage.getItem('moneypilot-purchases');
@@ -117,6 +122,37 @@ function readNumber(key: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function buildLinePath(points: ForecastPoint[]) {
+  const maxValue = Math.max(...points.map(point => point.value), 1);
+  return points.map((point, index) => {
+    const x = 18 + index * (264 / Math.max(points.length - 1, 1));
+    const y = 108 - Math.round((point.value / maxValue) * 82);
+    return `${index === 0 ? 'M' : 'L'}${x} ${y}`;
+  }).join(' ');
+}
+
+function ForecastChart({ points, label }: { points: ForecastPoint[]; label: string }) {
+  const path = buildLinePath(points);
+  const maxValue = Math.max(...points.map(point => point.value), 1);
+
+  return (
+    <div className="forecast-chart" role="img" aria-label={label}>
+      <svg viewBox="0 0 300 132" preserveAspectRatio="none">
+        <path className="forecast-grid-line" d="M18 108 H282 M18 67 H282 M18 26 H282" />
+        <path className="forecast-line" d={path} />
+        {points.map((point, index) => {
+          const x = 18 + index * (264 / Math.max(points.length - 1, 1));
+          const y = 108 - Math.round((point.value / maxValue) * 82);
+          return <circle key={point.year} cx={x} cy={y} r="4" />;
+        })}
+      </svg>
+      <div className="forecast-chart-labels">
+        {points.map(point => <span key={point.year}>{point.year} г.</span>)}
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
   const [visible, setVisible] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -160,35 +196,66 @@ export default function AnalyticsPage() {
       .sort((a, b) => b[1] - a[1]);
 
     const total = filteredPurchases.reduce((sum, item) => sum + item.amount, 0);
+    const dailyExpenses = rangeDates.map((date, index) => ({
+      year: index + 1,
+      value: purchases.filter(item => item.date === date).reduce((sum, item) => sum + item.amount, 0),
+    }));
+    const expenseChartPath = buildLinePath(dailyExpenses);
+    const spendingDays = dailyExpenses.filter(point => point.value > 0);
     const trend =
-      filteredPurchases.length > 1 && filteredPurchases[0].amount !== 0
-        ? Math.round((filteredPurchases[filteredPurchases.length - 1].amount - filteredPurchases[0].amount) / filteredPurchases[0].amount * 100)
+      spendingDays.length > 1 && spendingDays[0].value !== 0
+        ? Math.round((spendingDays[spendingDays.length - 1].value - spendingDays[0].value) / spendingDays[0].value * 100)
         : 0;
 
+    const budget = readNumber('moneypilot-budget') ?? 0;
     const savings = readNumber('moneypilot-savings') ?? 0;
     const members = readJson<FamilyMember[]>('moneypilot-family-members', []);
     const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
     const userAge = readNumber('moneypilot-user-age');
     const savingsGoals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
 
-    const daysInPeriod = range === 'today' ? 1 : range === 'week' ? 7 : 30;
-    const monthlyProjection = range === 'month' ? total : Math.round((total / Math.max(1, daysInPeriod)) * 30);
-    const simpleForecast = Math.round(monthlyProjection * 1.15);
+    const daysInPeriod = range === 'today' ? 1 : range === 'week' ? 7 : rangeDates.length;
+    const monthlyExpenses = Math.round((total / Math.max(1, daysInPeriod)) * 30);
+    const annualExpenses = monthlyExpenses * 12;
+    const simpleForecast = Math.round(annualExpenses * 1.15);
+    const simpleForecastPoints = Array.from({ length: 5 }, (_, index) => ({
+      year: index + 1,
+      value: Math.round(annualExpenses * 1.15 ** (index + 1)),
+    }));
 
     const totalFamilyTarget = familyGoals.reduce((sum, g) => sum + g.target, 0);
     const totalFamilyContributions = members.reduce((sum, m) => sum + m.contribute, 0);
-    const goalsProgress = totalFamilyTarget > 0 ? Math.round((totalFamilyContributions / totalFamilyTarget) * 100) : 0;
-    const goalsForecast = savings + monthlyProjection * 12;
+    const currentGoalSavings = savings + totalFamilyContributions;
+    const monthlySavings = Math.max(0, budget - monthlyExpenses);
+    const goalsForecast = currentGoalSavings + monthlySavings * 12;
+    const goalsProgress = totalFamilyTarget > 0
+      ? Math.min(100, Math.round((goalsForecast / totalFamilyTarget) * 100))
+      : null;
+    const goalsForecastPoints = Array.from({ length: 5 }, (_, index) => ({
+      year: index + 1,
+      value: currentGoalSavings + monthlySavings * 12 * (index + 1),
+    }));
 
-    let retirementForecast = 0;
-    let retirementMonthly = 0;
+    let retirementForecast: number | null = null;
+    let retirementMonthly: number | null = null;
+    let retirementForecastPoints: ForecastPoint[] = [];
     if (userAge && savingsGoals.length > 0) {
-      const totalRetirementTarget = savingsGoals.reduce((sum, g) => sum + g.targetAmount, 0);
-      const totalCurrentSavings = savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
-      const maxYearsLeft = Math.max(...savingsGoals.map(g => Math.max(1, g.targetAge - userAge)));
-      const remaining = Math.max(0, totalRetirementTarget - totalCurrentSavings);
-      retirementMonthly = Math.round(remaining / (maxYearsLeft * 12));
-      retirementForecast = totalCurrentSavings + retirementMonthly * 12;
+      const retirementPlans = savingsGoals.map(goal => {
+        const monthsLeft = Math.max(1, (goal.targetAge - userAge) * 12);
+        const remaining = Math.max(0, goal.targetAmount - goal.currentSavings);
+        return { ...goal, monthsLeft, monthly: Math.ceil(remaining / monthsLeft) };
+      });
+      retirementMonthly = retirementPlans.reduce((sum, goal) => sum + goal.monthly, 0);
+      retirementForecastPoints = Array.from({ length: 5 }, (_, index) => {
+        const months = (index + 1) * 12;
+        return {
+          year: index + 1,
+          value: retirementPlans.reduce((sum, goal) => (
+            sum + Math.min(goal.targetAmount, goal.currentSavings + goal.monthly * Math.min(months, goal.monthsLeft))
+          ), 0),
+        };
+      });
+      retirementForecast = retirementForecastPoints[0].value;
     }
 
     return {
@@ -204,15 +271,22 @@ export default function AnalyticsPage() {
       })),
       total,
       trend,
-      forecast: simpleForecast,
+      expenseChartPath,
       simpleForecast,
       goalsForecast,
       goalsProgress,
       retirementForecast,
       retirementMonthly,
-      monthlyProjection,
+      monthlyExpenses,
+      annualExpenses,
+      monthlySavings,
+      currentGoalSavings,
+      totalFamilyTarget,
+      simpleForecastPoints,
+      goalsForecastPoints,
+      retirementForecastPoints,
     };
-  }, [filteredPurchases, range]);
+  }, [filteredPurchases, purchases, range, rangeDates]);
 
   return (
     <div className={`page-grid ${visible ? 'visible' : ''}`}>
@@ -255,7 +329,7 @@ export default function AnalyticsPage() {
           {analytics ? (
             <>
               <svg viewBox="0 0 300 120" className="line-chart" aria-label="line chart">
-                <path d="M10 95 C50 70, 70 60, 100 70 S150 90, 180 60 S230 36, 290 20" />
+                <path d={analytics.expenseChartPath} />
               </svg>
               <p>За выбранный период расходы {analytics.trend >= 0 ? 'увеличились' : 'уменьшились'} на <strong>{Math.abs(analytics.trend)}%</strong>.</p>
             </>
@@ -289,34 +363,43 @@ export default function AnalyticsPage() {
             <>
               {forecastType === 'simple' && (
                 <>
-                  <p>Прогноз на основе средних расходов:</p>
+                  <p>Годовые расходы при сохранении текущего темпа и росте на 15% в год:</p>
                   <div className="forecast-box">
                     <p>Через год</p>
                     <strong>{formatCurrency(analytics.simpleForecast)}</strong>
-                    <span>ожидаемые расходы</span>
+                    <span>ожидаемые расходы за год</span>
                     <p style={{ marginTop: 8, color: '#84f4c0' }}>
-                      +{formatCurrency(analytics.simpleForecast - analytics.total)} к текущим
+                      +{formatCurrency(analytics.simpleForecast - analytics.annualExpenses)} к текущему годовому темпу
                     </p>
                   </div>
                   <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
-                    Средние расходы: {formatCurrency(analytics.monthlyProjection)}/мес
+                    Средние расходы: {formatCurrency(analytics.monthlyExpenses)}/мес
                   </p>
+                  <ForecastChart points={analytics.simpleForecastPoints} label="Прогноз годовых расходов на пять лет" />
                 </>
               )}
               {forecastType === 'goals' && (
                 <>
-                  <p>Прогноз накоплений с учётом семейных целей:</p>
+                  <p>Прогноз накоплений из остатка ежемесячного бюджета:</p>
                   <div className="forecast-box">
                     <p>Через год</p>
                     <strong>{formatCurrency(analytics.goalsForecast)}</strong>
                     <span>прогноз накоплений</span>
-                    <p style={{ marginTop: 8, color: '#84f4c0' }}>
-                      Прогресс по целям: {analytics.goalsProgress}%
-                    </p>
+                    {analytics.goalsProgress !== null && (
+                      <p style={{ marginTop: 8, color: '#84f4c0' }}>
+                        Прогресс семейных целей: {analytics.goalsProgress}%
+                      </p>
+                    )}
                   </div>
                   <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
-                    Откладывается: {formatCurrency(analytics.monthlyProjection)}/мес
+                    Уже накоплено: {formatCurrency(analytics.currentGoalSavings)} · доступно для накоплений: {formatCurrency(analytics.monthlySavings)}/мес
                   </p>
+                  {analytics.totalFamilyTarget > 0 && (
+                    <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
+                      Семейные цели: {formatCurrency(analytics.totalFamilyTarget)}
+                    </p>
+                  )}
+                  <ForecastChart points={analytics.goalsForecastPoints} label="Прогноз накоплений на пять лет" />
                 </>
               )}
               {forecastType === 'retirement' && (
@@ -324,19 +407,22 @@ export default function AnalyticsPage() {
                   <p>Пенсионный прогноз:</p>
                   <div className="forecast-box">
                     <p>Через год</p>
-                    <strong>{formatCurrency(analytics.retirementForecast)}</strong>
-                    <span>прогноз накоплений</span>
-                    {analytics.retirementMonthly > 0 && (
+                    <strong>{analytics.retirementForecast === null ? 'Нет данных' : formatCurrency(analytics.retirementForecast)}</strong>
+                    <span>прогноз накоплений по целям</span>
+                    {analytics.retirementMonthly !== null && (
                       <p style={{ marginTop: 8, color: '#84f4c0' }}>
                         Нужно откладывать: {formatCurrency(analytics.retirementMonthly)}/мес
                       </p>
                     )}
                   </div>
                   <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
-                    {analytics.retirementMonthly > 0
-                      ? 'Расчёт на основе целей из раздела Пенсия'
+                    {analytics.retirementMonthly !== null
+                      ? 'Ежемесячный взнос рассчитан отдельно для каждой цели с её сроком.'
                       : 'Добавьте цели в раздел Пенсия для точного расчёта'}
                   </p>
+                  {analytics.retirementForecastPoints.length > 0 && (
+                    <ForecastChart points={analytics.retirementForecastPoints} label="Прогноз накоплений по целям на пять лет" />
+                  )}
                 </>
               )}
             </>
