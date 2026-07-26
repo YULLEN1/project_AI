@@ -35,7 +35,7 @@ type SavingsGoal = {
   activity?: Array<{ amount: number; date: string }>;
 };
 
-type ForecastType = 'simple' | 'goals';
+type ForecastType = 'simple' | 'family-goals' | 'personal-goals';
 
 type ForecastPoint = {
   year: number;
@@ -59,6 +59,16 @@ type GoalPlan = {
   deadline?: string;
   kind: 'family' | 'personal' | 'pension';
 };
+
+function summarizeGoals(goals: GoalPlan[]) {
+  return {
+    current: goals.reduce((sum, goal) => sum + goal.current, 0),
+    target: goals.reduce((sum, goal) => sum + goal.target, 0),
+    plannedMonthly: goals.reduce((sum, goal) => sum + goal.plannedMonthly, 0),
+    actualThisMonth: goals.reduce((sum, goal) => sum + goal.actualThisMonth, 0),
+    actualMonthly: goals.reduce((sum, goal) => sum + goal.actualMonthly, 0),
+  };
+}
 
 const CATEGORY_COLORS = ['#37c7ff', '#8b6dff', '#84f4c0', '#ffca7a', '#ff7f8f', '#64a4ff'];
 
@@ -264,6 +274,19 @@ function ForecastChart({ points, label }: { points: ForecastPoint[]; label: stri
   );
 }
 
+function GoalForecast({ title, goals, summary, planPoints, factPoints }: { title: string; goals: GoalPlan[]; summary: ReturnType<typeof summarizeGoals>; planPoints: ForecastPoint[]; factPoints: ForecastPoint[] }) {
+  if (!goals.length) return <p className="settings-note">Добавьте {title.toLowerCase()}, чтобы построить прогноз.</p>;
+  const progress = summary.target > 0 ? Math.min(100, Math.round(summary.current / summary.target * 100)) : 0;
+  return <>
+    <p>Плановый темп - необходимый взнос; фактический - среднее подтверждённых пополнений за последние три месяца.</p>
+    <div className="forecast-box"><p>Уже накоплено</p><strong>{formatCurrency(summary.current)}</strong><span>из {formatCurrency(summary.target)} · {progress}%</span></div>
+    <p className="settings-note">План на месяц: {formatCurrency(summary.plannedMonthly)} · внесено: {formatCurrency(summary.actualThisMonth)} · {summary.actualThisMonth >= summary.plannedMonthly ? 'план выполнен' : `не внесено ${formatCurrency(summary.plannedMonthly - summary.actualThisMonth)}`}</p>
+    <div className="settings-list" style={{ marginTop: 16 }}>{goals.map(goal => <div className="settings-row" key={goal.id}><div><strong>{goal.title}</strong><p>{goal.kind === 'pension' ? 'Пенсия' : goal.kind === 'family' ? 'Семейная цель' : 'Личная цель'}{goal.deadline ? ` · срок ${goal.deadline}` : ''}</p></div><div><strong>{formatCurrency(goal.current)} из {formatCurrency(goal.target)}</strong><p>План {formatCurrency(goal.plannedMonthly)}/мес · факт {formatCurrency(goal.actualThisMonth)}/мес</p></div></div>)}</div>
+    <p className="settings-note" style={{ marginTop: 16 }}>Прогноз по плановому темпу</p><ForecastChart points={planPoints} label={`${title}: прогноз по плановому темпу`} />
+    {summary.actualMonthly > 0 ? <><p className="settings-note">Прогноз по фактическому темпу</p><ForecastChart points={factPoints} label={`${title}: прогноз по фактическому темпу`} /></> : <p className="settings-note">Нет фактических пополнений за последние три месяца.</p>}
+  </>;
+}
+
 export default function AnalyticsPage() {
   const [visible, setVisible] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -353,6 +376,8 @@ export default function AnalyticsPage() {
     }) : [];
     const familyGoalPlans = goalPlans.filter(goal => goal.kind === 'family');
     const personalGoalPlans = goalPlans.filter(goal => goal.kind !== 'family');
+    const familyGoalSummary = summarizeGoals(familyGoalPlans);
+    const personalGoalSummary = summarizeGoals(personalGoalPlans);
 
     return {
       habits: sortedCategories.map(([name, amount], index) => ({
@@ -388,6 +413,10 @@ export default function AnalyticsPage() {
        familyFactForecastPoints: factForecastPoints(familyGoalPlans),
        personalPlanForecastPoints: goalForecastPoints(personalGoalPlans, personalGoalPlans.reduce((sum, goal) => sum + goal.plannedMonthly, 0)),
        personalFactForecastPoints: factForecastPoints(personalGoalPlans),
+       familyGoalPlans,
+       personalGoalPlans,
+       familyGoalSummary,
+       personalGoalSummary,
     };
   }, [filteredPurchases, purchases, range, rangeDates, transactions]);
 
@@ -484,14 +513,15 @@ export default function AnalyticsPage() {
               className={`chip ${forecastType === 'simple' ? 'active' : ''}`}
               onClick={() => setForecastType('simple')}
             >
-              Простой
+              Расходы
             </button>
             <button
-              className={`chip ${forecastType === 'goals' ? 'active' : ''}`}
-              onClick={() => setForecastType('goals')}
+              className={`chip ${forecastType === 'family-goals' ? 'active' : ''}`}
+              onClick={() => setForecastType('family-goals')}
             >
-              С целями
+              Семейные цели
             </button>
+            <button className={`chip ${forecastType === 'personal-goals' ? 'active' : ''}`} onClick={() => setForecastType('personal-goals')}>Личные цели</button>
           </div>
           {analytics ? (
             <>
@@ -512,32 +542,8 @@ export default function AnalyticsPage() {
                   <ForecastChart points={analytics.simpleForecastPoints} label="Прогноз годовых расходов на пять лет" />
                 </>
               )}
-              {forecastType === 'goals' && (
-                <>
-                  <p>Один план для семейных, личных и пенсионных целей. Плановый темп показывает требуемый взнос, фактический - подтверждённые пополнения за последние три месяца.</p>
-                  <div className="forecast-box">
-                    <p>Уже в целях</p>
-                    <strong>{formatCurrency(analytics.goalsCurrent)}</strong>
-                    <span>из {formatCurrency(analytics.goalsTarget)}</span>
-                    {analytics.goalsProgress !== null && (
-                      <p style={{ marginTop: 8, color: '#84f4c0' }}>
-                        Общий прогресс: {analytics.goalsProgress}%
-                      </p>
-                    )}
-                  </div>
-                  <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
-                    План на этот месяц: {formatCurrency(analytics.goalsPlannedMonthly)} · внесено: {formatCurrency(analytics.goalsActualThisMonth)} · {analytics.goalsActualThisMonth >= analytics.goalsPlannedMonthly ? 'план выполнен' : `не внесено ${formatCurrency(analytics.goalsPlannedMonthly - analytics.goalsActualThisMonth)}`}
-                  </p>
-                  <div className="settings-list" style={{ marginTop: 16 }}>
-                    {analytics.goalPlans.map(goal => <div className="settings-row" key={goal.id}>
-                      <div><strong>{goal.title}</strong><p>{goal.kind === 'pension' ? 'Пенсия' : goal.kind === 'family' ? 'Семейная цель' : 'Личная цель'}{goal.deadline ? ` · срок ${goal.deadline}` : ''}</p></div>
-                      <div><strong>{formatCurrency(goal.current)} из {formatCurrency(goal.target)}</strong><p>План {formatCurrency(goal.plannedMonthly)}/мес · факт {formatCurrency(goal.actualThisMonth)}/мес · {goal.actualThisMonth >= goal.plannedMonthly ? 'выполнен' : `не внесено ${formatCurrency(goal.plannedMonthly - goal.actualThisMonth)}`}</p></div>
-                    </div>)}
-                  </div>
-                  {analytics.goalPlans.some(goal => goal.kind === 'family') && <section style={{ marginTop: 16 }}><h4>Семейные цели</h4><p className="settings-note">Прогноз по плановому темпу.</p><ForecastChart points={analytics.familyPlanForecastPoints} label="Прогноз семейных целей по плановому темпу" />{analytics.goalPlans.some(goal => goal.kind === 'family' && goal.actualMonthly > 0) ? <><p className="settings-note">Прогноз по фактическому темпу.</p><ForecastChart points={analytics.familyFactForecastPoints} label="Прогноз семейных целей по фактическому темпу" /></> : <p className="settings-note">Нет фактических семейных пополнений за последние три месяца.</p>}</section>}
-                  {analytics.goalPlans.some(goal => goal.kind !== 'family') && <section style={{ marginTop: 16 }}><h4>Личные и пенсионные цели</h4><p className="settings-note">Прогноз по плановому темпу.</p><ForecastChart points={analytics.personalPlanForecastPoints} label="Прогноз личных и пенсионных целей по плановому темпу" />{analytics.goalPlans.some(goal => goal.kind !== 'family' && goal.actualMonthly > 0) ? <><p className="settings-note">Прогноз по фактическому темпу.</p><ForecastChart points={analytics.personalFactForecastPoints} label="Прогноз личных и пенсионных целей по фактическому темпу" /></> : <p className="settings-note">Нет фактических личных пополнений за последние три месяца.</p>}</section>}
-                </>
-              )}
+              {forecastType === 'family-goals' && <GoalForecast title="Семейные цели" goals={analytics.familyGoalPlans} summary={analytics.familyGoalSummary} planPoints={analytics.familyPlanForecastPoints} factPoints={analytics.familyFactForecastPoints} />}
+              {forecastType === 'personal-goals' && <GoalForecast title="Личные и пенсионные цели" goals={analytics.personalGoalPlans} summary={analytics.personalGoalSummary} planPoints={analytics.personalPlanForecastPoints} factPoints={analytics.personalFactForecastPoints} />}
             </>
           ) : (
             <p>Пока нет прогноза — добавьте первые расходы.</p>
