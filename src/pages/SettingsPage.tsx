@@ -71,6 +71,7 @@ type SavingsGoal = {
   retirementAge?: number;
   lifeExpectancy?: number;
   currentSavings: number;
+  activity?: Array<{ id: string; amount: number; date: string }>;
 };
 
 type SettingsTab = 'general' | 'income' | 'goals' | 'family' | 'extras';
@@ -342,6 +343,23 @@ export default function SettingsPage() {
 
   const handleRemoveGoal = (id: string) => {
     if (window.confirm('Удалить эту цель накоплений?')) handleSaveSavingsGoals(savingsGoals.filter(g => g.id !== id));
+  };
+
+  const handleAddSavingsGoalContribution = (id: string) => {
+    const value = window.prompt('Сколько фактически внесено в эту цель?', '');
+    if (value === null) return;
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Введите сумму пополнения больше нуля.');
+      return;
+    }
+    const date = new Date().toISOString().slice(0, 10);
+    handleSaveSavingsGoals(savingsGoals.map(goal => goal.id === id ? {
+      ...goal,
+      currentSavings: goal.currentSavings + amount,
+      activity: [...(goal.activity ?? []), { id: `${Date.now()}-${amount}`, amount, date }],
+    } : goal));
+    setMessage('Фактическое пополнение цели сохранено.');
   };
 
   // Family handlers
@@ -695,7 +713,7 @@ export default function SettingsPage() {
                       <strong>{goal.name} <span className="goal-type">{goal.type ?? 'Пенсия'}</span></strong>
                       <p>{goal.monthlyPension ? `${formatCurrency(goal.monthlyPension)}/мес до ${goal.lifeExpectancy} лет · выход в ${goal.retirementAge} лет` : `${formatCurrency(goal.targetAmount)} · ${goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : `к ${goal.targetAge ?? 'неизвестному'} годам`}`}</p>
                     </div>
-                    <button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)} aria-label={`Удалить ${goal.name}`}>Удалить</button>
+                    <div style={{ display: 'flex', gap: 8 }}><button type="button" className="text-link text-button" onClick={() => handleAddSavingsGoalContribution(goal.id)}>Пополнить</button><button type="button" className="text-button" onClick={() => handleRemoveGoal(goal.id)} aria-label={`Удалить ${goal.name}`}>Удалить</button></div>
                   </div>
                 );
               }) : (

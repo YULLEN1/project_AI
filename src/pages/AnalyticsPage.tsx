@@ -17,6 +17,8 @@ type FamilyGoal = {
   currentSavings?: number;
   targetDate?: string;
   monthlyContribution?: number;
+  isPaused?: boolean;
+  activity?: Array<{ amount: number; date: string }>;
 };
 
 type SavingsGoal = {
@@ -30,9 +32,10 @@ type SavingsGoal = {
   retirementAge?: number;
   lifeExpectancy?: number;
   currentSavings: number;
+  activity?: Array<{ amount: number; date: string }>;
 };
 
-type ForecastType = 'simple' | 'goals' | 'retirement';
+type ForecastType = 'simple' | 'goals';
 
 type ForecastPoint = {
   year: number;
@@ -43,6 +46,18 @@ type CategoryTotal = {
   name: string;
   amount: number;
   color: string;
+};
+
+type GoalPlan = {
+  id: string;
+  title: string;
+  target: number;
+  current: number;
+  plannedMonthly: number;
+  actualThisMonth: number;
+  actualMonthly: number;
+  deadline?: string;
+  kind: 'family' | 'personal' | 'pension';
 };
 
 const CATEGORY_COLORS = ['#37c7ff', '#8b6dff', '#84f4c0', '#ffca7a', '#ff7f8f', '#64a4ff'];
@@ -143,7 +158,7 @@ function getMonthsUntil(goal: SavingsGoal, userAge?: number | null) {
   const { targetDate, targetAge } = goal;
   if (targetDate) {
     const now = new Date();
-    const target = new Date(`${targetDate}T00:00:00`);
+    const target = new Date(`${targetDate.length === 7 ? `${targetDate}-01` : targetDate}T00:00:00`);
     const months = (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth();
     return months > 0 ? months : null;
   }
@@ -158,6 +173,28 @@ function getTargetAmount(goal: SavingsGoal) {
   const pension = getPensionDetails(goal);
   if (pension) return pension.monthlyPension * Math.max(0, pension.lifeExpectancy - pension.retirementAge) * 12;
   return goal.targetAmount;
+}
+
+function getGoalPlans(familyGoals: FamilyGoal[], savingsGoals: SavingsGoal[], userAge: number | null, today: string): GoalPlan[] {
+  const currentMonth = today.slice(0, 7);
+  const threeMonthsAgo = new Date(`${currentMonth}-01T00:00:00`);
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 2);
+  const activitySummary = (activity: Array<{ amount: number; date: string }> = []) => ({
+    thisMonth: activity.filter(item => item.date.startsWith(currentMonth)).reduce((sum, item) => sum + item.amount, 0),
+    monthly: activity.filter(item => new Date(`${item.date}T00:00:00`) >= threeMonthsAgo).reduce((sum, item) => sum + item.amount, 0) / 3,
+  });
+  const family = familyGoals.map(goal => {
+    const activity = activitySummary(goal.activity);
+    return { id: `family-${goal.id}`, title: goal.title, target: goal.target, current: goal.currentSavings ?? 0, plannedMonthly: goal.isPaused ? 0 : goal.monthlyContribution ?? 0, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, kind: 'family' as const };
+  });
+  const personal = savingsGoals.map(goal => {
+    const target = getTargetAmount(goal);
+    const monthsLeft = getMonthsUntil(goal, userAge);
+    const plannedMonthly = monthsLeft ? Math.ceil(Math.max(0, target - goal.currentSavings) / monthsLeft) : 0;
+    const activity = activitySummary(goal.activity);
+    return { id: `personal-${goal.id}`, title: goal.name, target, current: goal.currentSavings, plannedMonthly, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, kind: getPensionDetails(goal) ? 'pension' as const : 'personal' as const };
+  });
+  return [...family, ...personal];
 }
 
 function buildLinePath(points: ForecastPoint[]) {
@@ -263,7 +300,6 @@ export default function AnalyticsPage() {
   const configuredIncome = readNumber('moneypilot-income');
 
   const analytics = useMemo(() => {
-    if (!filteredPurchases.length) return null;
     const categoryTotals = filteredPurchases.reduce<Record<string, number>>((acc, item) => {
       acc[item.category] = (acc[item.category] || 0) + item.amount;
       return acc;
@@ -299,52 +335,22 @@ export default function AnalyticsPage() {
       value: Math.round(annualExpenses * 1.15 ** (index + 1)),
     }));
 
-    const totalFamilyTarget = familyGoals.reduce((sum, g) => sum + g.target, 0);
-    const currentGoalSavings = familyGoals.reduce((sum, goal) => sum + (goal.currentSavings ?? 0), 0);
-    const monthlySavings = familyGoals.reduce((sum, goal) => sum + (goal.monthlyContribution ?? 0), 0);
-    const goalsForecast = currentGoalSavings + monthlySavings * 12;
-    const goalsForecastPoints = Array.from({ length: 5 }, (_, index) => ({
-      year: index + 1,
-      value: currentGoalSavings + monthlySavings * 12 * (index + 1),
-    }));
-
-    let retirementForecast: number | null = null;
-    let retirementMonthly: number | null = null;
-    let retirementForecastPoints: ForecastPoint[] = [];
-    let personalGoalsTarget = 0;
-    if (savingsGoals.length > 0) {
-      const retirementPlans = savingsGoals.flatMap(goal => {
-        const monthsLeft = getMonthsUntil(goal, userAge);
-        if (!monthsLeft) return [];
-        const targetAmount = getTargetAmount(goal);
-        const remaining = Math.max(0, targetAmount - goal.currentSavings);
-        return { ...goal, targetAmount, monthsLeft, monthly: Math.ceil(remaining / monthsLeft) };
-      });
-      if (retirementPlans.length > 0) {
-        personalGoalsTarget = retirementPlans.reduce((sum, goal) => sum + goal.targetAmount, 0);
-        retirementMonthly = retirementPlans.reduce((sum, goal) => sum + goal.monthly, 0);
-        retirementForecastPoints = Array.from({ length: 5 }, (_, index) => {
-          const months = (index + 1) * 12;
-          return {
-            year: index + 1,
-            value: retirementPlans.reduce((sum, goal) => (
-              sum + Math.min(goal.targetAmount, goal.currentSavings + goal.monthly * Math.min(months, goal.monthsLeft))
-            ), 0),
-          };
-        });
-        retirementForecast = retirementForecastPoints[0].value;
-      }
-    }
-
-    const combinedGoalsForecast = goalsForecast + (retirementForecast ?? 0);
-    const combinedGoalsTarget = totalFamilyTarget + personalGoalsTarget;
-    const combinedGoalsProgress = combinedGoalsTarget > 0
-      ? Math.min(100, Math.round((combinedGoalsForecast / combinedGoalsTarget) * 100))
-      : null;
-    const combinedGoalsForecastPoints = goalsForecastPoints.map((point, index) => ({
-      ...point,
-      value: point.value + (retirementForecastPoints[index]?.value ?? 0),
-    }));
+    const goalPlans = getGoalPlans(familyGoals, savingsGoals, userAge, getLocalToday());
+    const goalsTarget = goalPlans.reduce((sum, goal) => sum + goal.target, 0);
+    const goalsCurrent = goalPlans.reduce((sum, goal) => sum + goal.current, 0);
+    const goalsPlannedMonthly = goalPlans.reduce((sum, goal) => sum + goal.plannedMonthly, 0);
+    const goalsActualThisMonth = goalPlans.reduce((sum, goal) => sum + goal.actualThisMonth, 0);
+    const goalsActualMonthly = goalPlans.reduce((sum, goal) => sum + goal.actualMonthly, 0);
+    const goalsProgress = goalsTarget > 0 ? Math.min(100, Math.round((goalsCurrent / goalsTarget) * 100)) : null;
+    const goalForecastPoints = (monthly: number) => Array.from({ length: 5 }, (_, index) => {
+      const months = (index + 1) * 12;
+      return { year: index + 1, value: goalPlans.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + monthly * months * (goal.plannedMonthly > 0 ? goal.plannedMonthly / Math.max(1, goalsPlannedMonthly) : 0)), 0) };
+    });
+    const planForecastPoints = goalForecastPoints(goalsPlannedMonthly);
+    const factForecastPoints = goalPlans.length ? Array.from({ length: 5 }, (_, index) => {
+      const months = (index + 1) * 12;
+      return { year: index + 1, value: goalPlans.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + goal.actualMonthly * months), 0) };
+    }) : [];
 
     return {
       habits: sortedCategories.map(([name, amount], index) => ({
@@ -366,18 +372,18 @@ export default function AnalyticsPage() {
       trend,
       expenseChartPath,
       simpleForecast,
-       goalsForecast: combinedGoalsForecast,
-       goalsProgress: combinedGoalsProgress,
-      retirementForecast,
-      retirementMonthly,
+       goalPlans,
+       goalsProgress,
+       goalsTarget,
+       goalsCurrent,
+       goalsPlannedMonthly,
+       goalsActualThisMonth,
+       goalsActualMonthly,
       monthlyExpenses,
       annualExpenses,
-       monthlySavings: monthlySavings + (retirementMonthly ?? 0),
-       currentGoalSavings,
-       totalFamilyTarget: combinedGoalsTarget,
        simpleForecastPoints,
-       goalsForecastPoints: combinedGoalsForecastPoints,
-      retirementForecastPoints,
+       planForecastPoints,
+       factForecastPoints,
     };
   }, [filteredPurchases, purchases, range, rangeDates, transactions]);
 
@@ -482,12 +488,6 @@ export default function AnalyticsPage() {
             >
               С целями
             </button>
-            <button
-              className={`chip ${forecastType === 'retirement' ? 'active' : ''}`}
-              onClick={() => setForecastType('retirement')}
-            >
-              По целям
-            </button>
           </div>
           {analytics ? (
             <>
@@ -510,49 +510,29 @@ export default function AnalyticsPage() {
               )}
               {forecastType === 'goals' && (
                 <>
-                   <p>Прогноз по семейным, личным и пенсионным целям. Для личных целей учитывается необходимый ежемесячный взнос до срока.</p>
+                  <p>Один план для семейных, личных и пенсионных целей. Плановый темп показывает требуемый взнос, фактический - подтверждённые пополнения за последние три месяца.</p>
                   <div className="forecast-box">
-                    <p>Через год</p>
-                    <strong>{formatCurrency(analytics.goalsForecast)}</strong>
-                     <span>прогноз по всем целям</span>
+                    <p>Уже в целях</p>
+                    <strong>{formatCurrency(analytics.goalsCurrent)}</strong>
+                    <span>из {formatCurrency(analytics.goalsTarget)}</span>
                     {analytics.goalsProgress !== null && (
                       <p style={{ marginTop: 8, color: '#84f4c0' }}>
-                         Прогресс всех целей: {analytics.goalsProgress}%
+                        Общий прогресс: {analytics.goalsProgress}%
                       </p>
                     )}
                   </div>
                   <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
-                     Семейные накопления: {formatCurrency(analytics.currentGoalSavings)} · плановые взносы по всем целям: {formatCurrency(analytics.monthlySavings)}/мес
+                    План на этот месяц: {formatCurrency(analytics.goalsPlannedMonthly)} · внесено: {formatCurrency(analytics.goalsActualThisMonth)} · {analytics.goalsActualThisMonth >= analytics.goalsPlannedMonthly ? 'план выполнен' : `не внесено ${formatCurrency(analytics.goalsPlannedMonthly - analytics.goalsActualThisMonth)}`}
                   </p>
-                  {analytics.totalFamilyTarget > 0 && (
-                    <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
-                       Общая сумма целей, включая пенсионные: {formatCurrency(analytics.totalFamilyTarget)}
-                    </p>
-                  )}
-                   <ForecastChart points={analytics.goalsForecastPoints} label="Прогноз накоплений по всем целям на пять лет" />
-                </>
-              )}
-              {forecastType === 'retirement' && (
-                <>
-                  <p>Прогноз по вашим целям накоплений:</p>
-                  <div className="forecast-box">
-                    <p>Через год</p>
-                    <strong>{analytics.retirementForecast === null ? 'Нет данных' : formatCurrency(analytics.retirementForecast)}</strong>
-                    <span>накопления по плану целей</span>
-                    {analytics.retirementMonthly !== null && (
-                      <p style={{ marginTop: 8, color: '#84f4c0' }}>
-                        Нужно откладывать: {formatCurrency(analytics.retirementMonthly)}/мес
-                      </p>
-                    )}
+                  <div className="settings-list" style={{ marginTop: 16 }}>
+                    {analytics.goalPlans.map(goal => <div className="settings-row" key={goal.id}>
+                      <div><strong>{goal.title}</strong><p>{goal.kind === 'pension' ? 'Пенсия' : goal.kind === 'family' ? 'Семейная цель' : 'Личная цель'}{goal.deadline ? ` · срок ${goal.deadline}` : ''}</p></div>
+                      <div><strong>{formatCurrency(goal.current)} из {formatCurrency(goal.target)}</strong><p>План {formatCurrency(goal.plannedMonthly)}/мес · факт {formatCurrency(goal.actualThisMonth)}/мес · {goal.actualThisMonth >= goal.plannedMonthly ? 'выполнен' : `не внесено ${formatCurrency(goal.plannedMonthly - goal.actualThisMonth)}`}</p></div>
+                    </div>)}
                   </div>
-                  <p style={{ marginTop: 8, fontSize: '0.85rem', color: '#8aa2ca' }}>
-                    {analytics.retirementMonthly !== null
-                      ? 'Ежемесячный взнос рассчитан отдельно для каждой цели с её сроком.'
-                      : 'Добавьте цели накоплений и укажите для них срок, чтобы увидеть расчёт'}
-                  </p>
-                  {analytics.retirementForecastPoints.length > 0 && (
-                    <ForecastChart points={analytics.retirementForecastPoints} label="Прогноз накоплений по целям на пять лет" />
-                  )}
+                  <p style={{ marginTop: 16, fontSize: '0.85rem', color: '#8aa2ca' }}>По плану: {formatCurrency(analytics.goalsPlannedMonthly)}/мес. По факту за последние три месяца: {formatCurrency(analytics.goalsActualMonthly)}/мес.</p>
+                  <ForecastChart points={analytics.planForecastPoints} label="Прогноз накоплений по плановому темпу" />
+                  {analytics.goalsActualMonthly > 0 ? <><p style={{ marginTop: 16, fontSize: '0.85rem', color: '#8aa2ca' }}>Прогноз по фактическому темпу</p><ForecastChart points={analytics.factForecastPoints} label="Прогноз накоплений по фактическому темпу" /></> : <p className="settings-note">Пока нет фактических пополнений за последние три месяца, поэтому прогноз по факту не строится.</p>}
                 </>
               )}
             </>
