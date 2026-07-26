@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-
-type Purchase = {
-  title: string;
-  amount: number;
-  category: string;
-  date: string;
-};
+import { accountBalances, getAccounts, getTransactions } from '../finance';
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -73,8 +67,11 @@ export default function GoalsPage() {
   const data = useMemo(() => {
     const budget = readNumber('moneypilot-budget') ?? 0;
     const income = readNumber('moneypilot-income');
-    const savings = readNumber('moneypilot-savings') ?? 0;
-    const purchases = readJson<Purchase[]>('moneypilot-purchases', []);
+    const accounts = getAccounts();
+    const transactions = getTransactions();
+    const balances = accountBalances(accounts, transactions);
+    const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
+    const purchases = transactions.filter(transaction => transaction.type === 'expense' && transaction.status === 'completed').map(transaction => ({ amount: transaction.amount, category: transaction.category || 'Разное', date: transaction.date }));
     const suggestedItem = readJson<{ name: string; price: number }>('moneypilot-suggestedItem', { name: '', price: 0 });
     const monthDates = getMonthDates();
     const today = getLocalToday();

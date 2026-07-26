@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getTransactions, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -16,16 +17,6 @@ type FamilyGoal = {
   currentSavings?: number;
   targetDate?: string;
   monthlyContribution?: number;
-};
-
-type IncomeEvent = {
-  id: string;
-  source: string;
-  amount: number;
-  date: string;
-  status: 'expected' | 'received';
-  confidence: 'confirmed' | 'likely';
-  recurrence: 'once' | 'monthly';
 };
 
 type SavingsGoal = {
@@ -57,14 +48,7 @@ type CategoryTotal = {
 const CATEGORY_COLORS = ['#37c7ff', '#8b6dff', '#84f4c0', '#ffca7a', '#ff7f8f', '#64a4ff'];
 
 function readPurchases() {
-  if (typeof window === 'undefined') return [] as Purchase[];
-  const raw = window.localStorage.getItem('moneypilot-purchases');
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw) as Purchase[];
-  } catch {
-    return [];
-  }
+  return getTransactions().filter(item => item.type === 'expense' && item.status === 'completed').map(item => ({ title: item.title, amount: item.amount, category: item.category || 'Разное', date: item.date }));
 }
 
 function getSavedRange() {
@@ -246,6 +230,7 @@ function ForecastChart({ points, label }: { points: ForecastPoint[]; label: stri
 export default function AnalyticsPage() {
   const [visible, setVisible] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [range, setRange] = useState<RangeKey>('week');
   const [selectedDate, setSelectedDate] = useState(getSavedSelectedDate());
   const [forecastType, setForecastType] = useState<ForecastType>('simple');
@@ -253,13 +238,14 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(true), 80);
     setPurchases(readPurchases());
+    setTransactions(getTransactions());
     setRange(getSavedRange());
     setSelectedDate(getSavedSelectedDate());
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === 'moneypilot-range') setRange(getSavedRange());
       if (event.key === 'moneypilot-selectedDate') setSelectedDate(getSavedSelectedDate());
-      if (event.key === 'moneypilot-purchases') setPurchases(readPurchases());
+      if (event.key === 'moneypilot-purchases' || event.key === 'moneypilot-transactions') { setPurchases(readPurchases()); setTransactions(getTransactions()); }
     };
 
     window.addEventListener('storage', handleStorage);
@@ -299,7 +285,7 @@ export default function AnalyticsPage() {
         : 0;
 
     const income = readNumber('moneypilot-income');
-    const actualIncome = readJson<IncomeEvent[]>('moneypilot-income-events', []).filter(event => event.status === 'received' && rangeDates.includes(event.date)).reduce((sum, event) => sum + event.amount, 0);
+    const actualIncome = transactions.filter(event => event.type === 'income' && event.status === 'completed' && rangeDates.includes(event.date)).reduce((sum, event) => sum + event.amount, 0);
     const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
     const userAge = readNumber('moneypilot-user-age');
     const savingsGoals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
@@ -384,7 +370,7 @@ export default function AnalyticsPage() {
       goalsForecastPoints,
       retirementForecastPoints,
     };
-  }, [filteredPurchases, purchases, range, rangeDates]);
+  }, [filteredPurchases, purchases, range, rangeDates, transactions]);
 
   return (
     <div className={`page-grid ${visible ? 'visible' : ''}`}>
@@ -429,9 +415,9 @@ export default function AnalyticsPage() {
           <p>{range === 'today' ? 'Сегодня' : range === 'week' ? 'За выбранную неделю' : 'За выбранный месяц'}</p>
         </article>
         <article className="card total-card">
-          <span>Остаток по месячному темпу</span>
+          <span>Прогноз остатка за месяц</span>
           <strong>{configuredIncome === null ? 'Нет данных' : formatCurrency(configuredIncome - (analytics?.monthlyExpenses ?? 0))}</strong>
-          <p>{configuredIncome === null ? 'Укажите доход для расчёта.' : `Доход минус расчётные расходы ${formatCurrency(analytics?.monthlyExpenses ?? 0)}/мес.`}</p>
+          <p>{configuredIncome === null ? 'Укажите ориентир дохода для прогноза.' : `Сценарий: ориентир дохода минус средние расходы ${formatCurrency(analytics?.monthlyExpenses ?? 0)}/мес.`}</p>
         </article>
       </section>
 
@@ -498,7 +484,7 @@ export default function AnalyticsPage() {
             <>
               {forecastType === 'simple' && (
                 <>
-                  <p>Годовые расходы при сохранении текущего темпа и росте на 15% в год:</p>
+                   <p>Прогноз, не факт: средние расходы выбранного периода, пересчитанные на год, с допущением роста 15% в год.</p>
                   <div className="forecast-box">
                     <p>Через год</p>
                     <strong>{formatCurrency(analytics.simpleForecast)}</strong>

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { getAccounts, getPlannedPayments, getTransactions } from '../finance';
 
 const prompts = [
   'Почему в этом месяце денег стало меньше?',
@@ -28,8 +29,9 @@ function collectContext() {
     currency: '₽ (рубли)',
     budget: readNumber('moneypilot-budget'),
     incomeEvents: readJson('moneypilot-income-events', []),
-    savings: readNumber('moneypilot-savings'),
-    purchases: readJson('moneypilot-purchases', []),
+    accounts: getAccounts(),
+    plannedPayments: getPlannedPayments(),
+    transactions: getTransactions(),
     familyMembers: readJson('moneypilot-family-members', []),
     familyGoals: readJson('moneypilot-family-goals', []),
     userAge: readNumber('moneypilot-user-age'),

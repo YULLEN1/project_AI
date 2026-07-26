@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { getAccounts, getPlannedPayments, getTransactions, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
 
 const storageKeys = {
   budget: 'moneypilot-budget',
@@ -152,6 +153,15 @@ export default function SettingsPage() {
     if (typeof window === 'undefined') return [] as IncomeEvent[];
     return readJson<IncomeEvent[]>(storageKeys.incomeEvents, []);
   });
+  const [accounts, setAccounts] = useState<Account[]>(() => getAccounts());
+  const [plannedPayments, setPlannedPayments] = useState<PlannedPayment[]>(() => getPlannedPayments());
+  const [transactions, setTransactions] = useState<Transaction[]>(() => getTransactions());
+  const [accountName, setAccountName] = useState('');
+  const [accountOpeningBalance, setAccountOpeningBalance] = useState('');
+  const [paymentTitle, setPaymentTitle] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDueDay, setPaymentDueDay] = useState('');
+  const [paymentCategory, setPaymentCategory] = useState('Обязательные платежи');
 
   const [members, setMembers] = useState<FamilyMember[]>(() => {
     if (typeof window === 'undefined') return [] as FamilyMember[];
@@ -274,6 +284,9 @@ export default function SettingsPage() {
 
   const clearPurchases = () => {
     window.localStorage.removeItem(storageKeys.purchases);
+    const nextTransactions = transactions.filter(transaction => transaction.type !== 'expense');
+    setTransactions(nextTransactions);
+    saveTransactions(nextTransactions);
     setMessage('История расходов очищена.');
   };
 
@@ -453,6 +466,12 @@ export default function SettingsPage() {
     }
     setSavings(parsed);
     window.localStorage.setItem(storageKeys.savings, String(parsed));
+    const reserve = accounts.find(account => account.id === 'reserve');
+    const nextAccounts = reserve
+      ? accounts.map(account => account.id === 'reserve' ? { ...account, openingBalance: parsed } : account)
+      : [...accounts, { id: 'reserve', name: 'Накопления', openingBalance: parsed, spendable: false }];
+    setAccounts(nextAccounts);
+    saveAccounts(nextAccounts);
     setMessage('Накопления сохранены.');
   };
 
@@ -472,15 +491,59 @@ export default function SettingsPage() {
     const next = [...incomeEvents, event];
     setIncomeEvents(next);
     window.localStorage.setItem(storageKeys.incomeEvents, JSON.stringify(next));
+    if (event.status === 'received') {
+      const nextTransactions = [...transactions, { id: `income-${event.id}`, type: 'income' as const, status: 'completed' as const, title: event.source, amount: event.amount, date: event.date, accountId: 'main' }];
+      setTransactions(nextTransactions);
+      saveTransactions(nextTransactions);
+    }
     setIncomeSource('');
     setIncomeAmount('');
     setMessage(incomeStatus === 'received' ? 'Поступление добавлено в журнал.' : 'Плановое поступление сохранено.');
+  };
+
+  const handleAddAccount = (event: FormEvent) => {
+    event.preventDefault();
+    const openingBalance = Number(accountOpeningBalance);
+    if (!accountName.trim() || !Number.isFinite(openingBalance) || openingBalance < 0) {
+      setMessage('Для счёта укажите название и остаток не меньше нуля.');
+      return;
+    }
+    const next = [...accounts, { id: `${Date.now()}-${accountName.trim()}`, name: accountName.trim(), openingBalance, spendable: true }];
+    setAccounts(next);
+    saveAccounts(next);
+    setAccountName('');
+    setAccountOpeningBalance('');
+  };
+
+  const handleAddPlannedPayment = (event: FormEvent) => {
+    event.preventDefault();
+    const amount = Number(paymentAmount);
+    const dueDay = Number(paymentDueDay);
+    if (!paymentTitle.trim() || !Number.isFinite(amount) || amount <= 0 || !Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) {
+      setMessage('Для платежа укажите название, сумму и день месяца от 1 до 31.');
+      return;
+    }
+    const next = [...plannedPayments, { id: `${Date.now()}-${paymentTitle.trim()}`, title: paymentTitle.trim(), amount, dueDay, category: paymentCategory.trim() || 'Обязательные платежи', active: true }];
+    setPlannedPayments(next);
+    savePlannedPayments(next);
+    setPaymentTitle('');
+    setPaymentAmount('');
+    setPaymentDueDay('');
+  };
+
+  const removeTransaction = (id: string) => {
+    const next = transactions.filter(transaction => transaction.id !== id);
+    setTransactions(next);
+    saveTransactions(next);
   };
 
   const handleRemoveIncomeEvent = (id: string) => {
     const next = incomeEvents.filter(event => event.id !== id);
     setIncomeEvents(next);
     window.localStorage.setItem(storageKeys.incomeEvents, JSON.stringify(next));
+    const nextTransactions = transactions.filter(transaction => transaction.id !== `income-${id}` && transaction.id !== `legacy-income-${id}`);
+    setTransactions(nextTransactions);
+    saveTransactions(nextTransactions);
   };
 
   const tabs: Array<{ key: SettingsTab; label: string }> = [
@@ -595,6 +658,20 @@ export default function SettingsPage() {
           <div className="settings-block">
             <h4>Календарь и журнал поступлений</h4>
             <div className="settings-list">{incomeEvents.length ? [...incomeEvents].sort((a, b) => b.date.localeCompare(a.date)).map(event => <div className="settings-row" key={event.id}><div><strong>{event.source}</strong><p>{event.status === 'received' ? 'Получено' : event.confidence === 'confirmed' ? 'Ожидается, подтверждено' : 'Ожидается, вероятно'} · {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${event.date}T00:00:00`))}{event.recurrence === 'monthly' ? ' · ежемесячно' : ''}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{formatCurrency(event.amount)}</strong><button className="text-button" type="button" onClick={() => handleRemoveIncomeEvent(event.id)}>Удалить</button></div></div>) : <div className="empty-cell">Добавьте первое ожидаемое или фактически полученное поступление.</div>}</div>
+          </div>
+          <div className="settings-block">
+            <div className="settings-block-head"><div><h4>Счета и стартовые остатки</h4><p>Остатки на доступных счетах формируют фактические деньги, а не лимит расходов.</p></div></div>
+            <div className="settings-list">{accounts.map(account => <div className="settings-row" key={account.id}><div><strong>{account.name}</strong><p>{account.spendable ? 'Учитывается в доступных деньгах' : 'Резервный счёт, не доступен для трат'}</p></div><strong>{formatCurrency(account.openingBalance)}</strong></div>)}</div>
+            <form className="inline-form" onSubmit={handleAddAccount}><input value={accountName} onChange={e => setAccountName(e.target.value)} placeholder="Название счёта" /><input value={accountOpeningBalance} onChange={e => setAccountOpeningBalance(e.target.value)} placeholder="Стартовый остаток, ₽" type="number" min="0" /><button type="submit">Добавить счёт</button></form>
+          </div>
+          <div className="settings-block">
+            <div className="settings-block-head"><div><h4>Обязательные платежи</h4><p>Эти суммы резервируются до ближайшего дохода, но не считаются расходом, пока платёж не внесён в журнал.</p></div></div>
+            <div className="settings-list">{plannedPayments.length ? plannedPayments.map(payment => <div className="settings-row" key={payment.id}><div><strong>{payment.title}</strong><p>{payment.category} · {payment.dueDay}-го числа каждого месяца</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>−{formatCurrency(payment.amount)}</strong><button className="text-button" type="button" onClick={() => { const next = plannedPayments.filter(item => item.id !== payment.id); setPlannedPayments(next); savePlannedPayments(next); }}>Удалить</button></div></div>) : <div className="empty-cell">Добавьте ипотеку, аренду, ЖКХ и другие регулярные обязательства.</div>}</div>
+            <form className="inline-form" onSubmit={handleAddPlannedPayment}><input value={paymentTitle} onChange={e => setPaymentTitle(e.target.value)} placeholder="Например, ипотека" /><input value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="Сумма, ₽" type="number" min="1" /><input value={paymentDueDay} onChange={e => setPaymentDueDay(e.target.value)} placeholder="День месяца" type="number" min="1" max="31" /><input value={paymentCategory} onChange={e => setPaymentCategory(e.target.value)} placeholder="Категория" /><button type="submit">Добавить платёж</button></form>
+          </div>
+          <div className="settings-block">
+            <div className="settings-block-head"><div><h4>Журнал фактических операций</h4><p>Завершённые операции меняют остатки счетов. Плановые операции и отменённые не входят в факт.</p></div></div>
+            <div className="settings-list">{transactions.length ? [...transactions].sort((a, b) => b.date.localeCompare(a.date)).map(transaction => <div className="settings-row" key={transaction.id}><div><strong>{transaction.title}</strong><p>{transaction.date} · {transaction.type === 'income' ? 'Поступление' : transaction.type === 'expense' ? transaction.category || 'Расход' : transaction.type} · {transaction.status === 'completed' ? 'Факт' : transaction.status}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{transaction.type === 'income' ? '+' : '−'}{formatCurrency(transaction.amount)}</strong><button className="text-button" type="button" onClick={() => removeTransaction(transaction.id)}>Удалить</button></div></div>) : <div className="empty-cell">Операции появятся после добавления расхода или полученного поступления.</div>}</div>
           </div>
         </section>
       )}

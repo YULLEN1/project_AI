@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, monthDates, plannedPaymentsUntil, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -19,21 +20,6 @@ type IncomeEvent = {
   confidence: 'confirmed' | 'likely';
   recurrence: 'once' | 'monthly';
 };
-
-function readPurchases() {
-  if (typeof window === 'undefined') return [] as Purchase[];
-  const raw = window.localStorage.getItem('moneypilot-purchases');
-  if (!raw) return [];
-  try {
-    const saved = JSON.parse(raw) as Purchase[];
-    return saved.map(item => ({
-      ...item,
-      date: item.date || getToday(),
-    }));
-  } catch {
-    return [];
-  }
-}
 
 function getBaseBudget() {
   if (typeof window === 'undefined') return null;
@@ -139,11 +125,6 @@ function daysBetween(fromDate: string, toDate: string) {
   return Math.max(0, Math.round((new Date(`${toDate}T00:00:00`).getTime() - new Date(`${fromDate}T00:00:00`).getTime()) / 86400000));
 }
 
-function getActualIncomeToDate(events: IncomeEvent[], selectedDate: string) {
-  const monthKey = selectedDate.slice(0, 7);
-  return events.filter(event => event.status === 'received' && event.date.startsWith(monthKey) && event.date <= selectedDate).reduce((sum, event) => sum + event.amount, 0);
-}
-
 function getPlannedIncomeForMonth(events: IncomeEvent[], selectedDate: string, includeLikely: boolean) {
   const monthKey = selectedDate.slice(0, 7);
   return events.reduce((sum, event) => {
@@ -202,7 +183,7 @@ function detectCategory(title: string): CategoryKey {
 }
 
 export default function DashboardPage() {
-  const [purchases, setPurchases] = useState<Purchase[]>(() => readPurchases());
+  const [transactions, setTransactions] = useState<Transaction[]>(() => getTransactions());
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<CategoryKey>('Разное');
@@ -216,16 +197,17 @@ export default function DashboardPage() {
   const savings = getSavedSavings();
 
   useEffect(() => {
-    window.localStorage.setItem('moneypilot-purchases', JSON.stringify(purchases));
-  }, [purchases]);
-
-  useEffect(() => {
     window.localStorage.setItem('moneypilot-range', range);
     window.localStorage.setItem('moneypilot-selectedDate', selectedDate);
   }, [range, selectedDate]);
 
 
   const baseBudget = getBaseBudget();
+  const accounts = getAccounts();
+  const plannedPayments = getPlannedPayments();
+  const purchases = useMemo<Purchase[]>(() => transactions
+    .filter(item => item.type === 'expense' && item.status === 'completed')
+    .map(item => ({ title: item.title, amount: item.amount, category: item.category || 'Разное', date: item.date })), [transactions]);
   const incomeEvents = readIncomeEvents();
   const nextIncome = useMemo(() => getNextIncome(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
   const daysToIncome = nextIncome ? daysBetween(selectedDate, nextIncome.date) : null;
@@ -236,15 +218,18 @@ export default function DashboardPage() {
   );
   const totalSpent = useMemo(() => filteredPurchases.reduce((sum, item) => sum + item.amount, 0), [filteredPurchases]);
   const monthKey = selectedDate.slice(0, 7);
-  const monthSpent = useMemo(() => purchases.filter(item => item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [purchases, monthKey, selectedDate]);
-  const actualIncomeToDate = useMemo(() => getActualIncomeToDate(incomeEvents, selectedDate), [incomeEvents, selectedDate]);
+  const monthSpent = useMemo(() => calculateTotalSpent(transactions, `${monthKey}-01`, selectedDate), [transactions, monthKey, selectedDate]);
+  const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate]);
   const plannedIncomeForMonth = useMemo(() => getPlannedIncomeForMonth(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
   const remainingBudget = baseBudget !== null ? baseBudget - monthSpent : 0;
-  const availableCash = Math.max(0, actualIncomeToDate - monthSpent);
-  const spendableBeforeIncome = Math.min(Math.max(0, remainingBudget), availableCash);
+  const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
+  const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
+  const reserveThrough = nextIncome?.date ?? monthDates(selectedDate).end;
+  const paymentsReserved = plannedPaymentsUntil(plannedPayments, selectedDate, reserveThrough);
+  const spendableBeforeIncome = Math.min(remainingBudget, availableCash - paymentsReserved);
   const dailyBudget = baseBudget !== null && daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);
-  const plannedMonthBalance = Math.min(Math.max(0, remainingBudget), Math.max(0, plannedIncomeForMonth - monthSpent));
+  const plannedMonthBalance = Math.min(remainingBudget, availableCash + Math.max(0, plannedIncomeForMonth - actualIncomeToDate) - plannedPaymentsUntil(plannedPayments, selectedDate, monthDates(selectedDate).end));
   const plannedDailyBudget = plannedMonthBalance / daysLeftInMonth;
   const healthScore = baseBudget !== null && filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
@@ -271,12 +256,18 @@ export default function DashboardPage() {
       return;
     }
 
-    setPurchases(prev => [...prev, {
+    const next = [...transactions, {
+      id: `${Date.now()}-${title.trim()}`,
+      type: 'expense' as const,
+      status: 'completed' as const,
       title: title.trim(),
       amount: parsedAmount,
       category,
       date: normalizeDate(date),
-    }] );
+      accountId: 'main',
+    }];
+    setTransactions(next);
+    saveTransactions(next);
     setTitle('');
     setAmount('');
     setCategory('Разное');
@@ -293,7 +284,7 @@ export default function DashboardPage() {
           {baseBudget !== null && nextIncome ? (
             <>
               <strong className="decision-amount">{formatCurrency(Math.round(dailyBudget))}</strong>
-              <p>Фактически получено: {formatCurrency(actualIncomeToDate)}. Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · через {daysToIncome} дн. Доступно до него: {formatCurrency(spendableBeforeIncome)}.</p>
+              <p>На доступных счетах: {formatCurrency(availableCash)}. Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · через {daysToIncome} дн.</p>
             </>
           ) : (
             <p>Укажите месячный лимит и добавьте подтверждённое поступление в настройках, чтобы получить безопасный дневной ориентир.</p>
@@ -301,6 +292,15 @@ export default function DashboardPage() {
         </div>
         <Link className="hero-action" to="/settings">{baseBudget === null || !nextIncome ? 'Добавить поступление' : 'Изменить план'}</Link>
       </section>
+      {baseBudget !== null && <section className="card calculation-breakdown" aria-label="Расчёт доступных денег">
+        <div className="card-head"><div><h2>Как рассчитано «можно потратить»</h2><p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p></div></div>
+        <div className="settings-list">
+          <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
+          <div className="settings-row"><span>Резерв обязательных платежей до дохода</span><strong>−{formatCurrency(paymentsReserved)}</strong></div>
+          <div className="settings-row"><span>Остаток месячного лимита</span><strong>{formatCurrency(remainingBudget)}</strong></div>
+          <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
+        </div>
+      </section>}
       {incomeEvents.some(event => event.status === 'expected' && event.confidence === 'likely') && <label className="income-confidence-toggle"><input type="checkbox" checked={includeLikelyIncome} onChange={e => setIncludeLikelyIncome(e.target.checked)} /> Учитывать вероятные поступления в ориентире</label>}
 
       <section className="widget-tabs" aria-label="Временные показатели">
@@ -376,7 +376,7 @@ export default function DashboardPage() {
           <strong>{baseBudget !== null && nextIncome ? formatCurrency(spendableBeforeIncome) : 'Настройте данные'}</strong>
           {baseBudget !== null && nextIncome ? (
             <div className={`mini-pill ${spendableBeforeIncome > 0 ? 'good' : 'warning'}`}>
-              {actualIncomeToDate === 0 ? 'Нет полученных поступлений в этом месяце' : `${formatCurrency(spendableBeforeIncome)} до следующего дохода`}
+               {spendableBeforeIncome < 0 ? `Дефицит ${formatCurrency(Math.abs(spendableBeforeIncome))}` : `${formatCurrency(spendableBeforeIncome)} до следующего дохода`}
             </div>
           ) : (
             <div className="mini-pill">Через настройки</div>
