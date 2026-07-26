@@ -40,6 +40,7 @@ type ForecastType = 'simple' | 'family-goals' | 'personal-goals';
 type ForecastPoint = {
   year: number;
   value: number;
+  label?: string;
 };
 
 type CategoryTotal = {
@@ -57,6 +58,7 @@ type GoalPlan = {
   actualThisMonth: number;
   actualMonthly: number;
   deadline?: string;
+  monthsLeft?: number;
   kind: 'family' | 'personal' | 'pension';
 };
 
@@ -167,16 +169,22 @@ function getMonthsUntil(goal: SavingsGoal, userAge?: number | null) {
   }
   const { targetDate, targetAge } = goal;
   if (targetDate) {
-    const now = new Date();
-    const target = new Date(`${targetDate.length === 7 ? `${targetDate}-01` : targetDate}T00:00:00`);
-    const months = (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth();
-    return months > 0 ? months : null;
+    return getMonthsUntilDate(targetDate);
   }
   if (targetAge && userAge) {
     const months = (targetAge - userAge) * 12;
     return months > 0 ? months : null;
   }
   return null;
+}
+
+function getMonthsUntilDate(targetDate?: string) {
+  if (!targetDate) return null;
+  const now = new Date();
+  const date = targetDate.length === 7 ? `${targetDate}-01` : targetDate;
+  const target = new Date(`${date}T00:00:00`);
+  const months = (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth();
+  return Number.isFinite(months) && months > 0 ? months : null;
 }
 
 function getTargetAmount(goal: SavingsGoal) {
@@ -195,16 +203,31 @@ function getGoalPlans(familyGoals: FamilyGoal[], savingsGoals: SavingsGoal[], us
   });
   const family = familyGoals.map(goal => {
     const activity = activitySummary(goal.activity);
-    return { id: `family-${goal.id}`, title: goal.title, target: goal.target, current: goal.currentSavings ?? 0, plannedMonthly: goal.isPaused ? 0 : goal.monthlyContribution ?? 0, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, kind: 'family' as const };
+    return { id: `family-${goal.id}`, title: goal.title, target: goal.target, current: goal.currentSavings ?? 0, plannedMonthly: goal.isPaused ? 0 : goal.monthlyContribution ?? 0, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, monthsLeft: getMonthsUntilDate(goal.targetDate) ?? undefined, kind: 'family' as const };
   });
   const personal = savingsGoals.map(goal => {
     const target = getTargetAmount(goal);
     const monthsLeft = getMonthsUntil(goal, userAge);
     const plannedMonthly = monthsLeft ? Math.ceil(Math.max(0, target - goal.currentSavings) / monthsLeft) : 0;
     const activity = activitySummary(goal.activity);
-    return { id: `personal-${goal.id}`, title: goal.name, target, current: goal.currentSavings, plannedMonthly, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, kind: getPensionDetails(goal) ? 'pension' as const : 'personal' as const };
+    return { id: `personal-${goal.id}`, title: goal.name, target, current: goal.currentSavings, plannedMonthly, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, monthsLeft: monthsLeft ?? undefined, kind: getPensionDetails(goal) ? 'pension' as const : 'personal' as const };
   });
   return [...family, ...personal];
+}
+
+function formatMonthsLabel(months: number) {
+  const years = Math.floor(months / 12);
+  const remainder = months % 12;
+  if (!years) return `${months} мес.`;
+  if (!remainder) return `${years} г.`;
+  return `${years} г. ${remainder} мес.`;
+}
+
+function getGoalForecastMonths(goals: GoalPlan[]) {
+  const nearestDeadline = Math.min(...goals.map(goal => goal.monthsLeft ?? Infinity));
+  const horizon = nearestDeadline <= 60 ? nearestDeadline : 60;
+  const annualPoints = [12, 24, 36, 48].filter(month => month < horizon);
+  return [...annualPoints, horizon];
 }
 
 function buildLinePath(points: ForecastPoint[]) {
@@ -260,15 +283,15 @@ function ForecastChart({ points, label }: { points: ForecastPoint[]; label: stri
         {points.map((point, index) => {
           const x = 18 + index * (264 / Math.max(points.length - 1, 1));
           const y = 108 - Math.round((point.value / maxValue) * 82);
-          return <circle key={point.year} cx={x} cy={y} r="4" />;
+          return <circle key={`${point.label ?? point.year}-${index}`} cx={x} cy={y} r="4" />;
         })}
       </svg>
       <div className="forecast-chart-labels">
-        {points.map(point => <span key={point.year}>{point.year} г.</span>)}
+        {points.map((point, index) => <span key={`${point.label ?? point.year}-${index}`}>{point.label ?? `${point.year} г.`}</span>)}
       </div>
       <table className="sr-only">
         <caption>{label}</caption>
-        <tbody>{points.map(point => <tr key={point.year}><th scope="row">Через {point.year} г.</th><td>{formatCurrency(point.value)}</td></tr>)}</tbody>
+        <tbody>{points.map((point, index) => <tr key={`${point.label ?? point.year}-${index}`}><th scope="row">Через {point.label ?? `${point.year} г.`}</th><td>{formatCurrency(point.value)}</td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -277,8 +300,10 @@ function ForecastChart({ points, label }: { points: ForecastPoint[]; label: stri
 function GoalForecast({ title, goals, summary, planPoints, factPoints }: { title: string; goals: GoalPlan[]; summary: ReturnType<typeof summarizeGoals>; planPoints: ForecastPoint[]; factPoints: ForecastPoint[] }) {
   if (!goals.length) return <p className="settings-note">Добавьте {title.toLowerCase()}, чтобы построить прогноз.</p>;
   const progress = summary.target > 0 ? Math.min(100, Math.round(summary.current / summary.target * 100)) : 0;
+  const deadlineMonths = Math.min(...goals.map(goal => goal.monthsLeft ?? Infinity));
   return <>
     <p>Плановый темп - необходимый взнос; фактический - среднее подтверждённых пополнений за последние три месяца.</p>
+    {deadlineMonths <= 60 && <p className="settings-note">График построен до ближайшего дедлайна: {formatMonthsLabel(deadlineMonths)}.</p>}
     <div className="forecast-box"><p>Уже накоплено</p><strong>{formatCurrency(summary.current)}</strong><span>из {formatCurrency(summary.target)} · {progress}%</span></div>
     <p className="settings-note">План на месяц: {formatCurrency(summary.plannedMonthly)} · внесено: {formatCurrency(summary.actualThisMonth)} · {summary.actualThisMonth >= summary.plannedMonthly ? 'план выполнен' : `не внесено ${formatCurrency(summary.plannedMonthly - summary.actualThisMonth)}`}</p>
     <div className="settings-list" style={{ marginTop: 16 }}>{goals.map(goal => <div className="settings-row" key={goal.id}><div><strong>{goal.title}</strong><p>{goal.kind === 'pension' ? 'Пенсия' : goal.kind === 'family' ? 'Семейная цель' : 'Личная цель'}{goal.deadline ? ` · срок ${goal.deadline}` : ''}</p></div><div><strong>{formatCurrency(goal.current)} из {formatCurrency(goal.target)}</strong><p>План {formatCurrency(goal.plannedMonthly)}/мес · факт {formatCurrency(goal.actualThisMonth)}/мес</p></div></div>)}</div>
@@ -365,14 +390,12 @@ export default function AnalyticsPage() {
     const goalsActualThisMonth = goalPlans.reduce((sum, goal) => sum + goal.actualThisMonth, 0);
     const goalsActualMonthly = goalPlans.reduce((sum, goal) => sum + goal.actualMonthly, 0);
     const goalsProgress = goalsTarget > 0 ? Math.min(100, Math.round((goalsCurrent / goalsTarget) * 100)) : null;
-    const goalForecastPoints = (goals: GoalPlan[], monthly: number) => Array.from({ length: 5 }, (_, index) => {
-      const months = (index + 1) * 12;
+    const goalForecastPoints = (goals: GoalPlan[], monthly: number) => getGoalForecastMonths(goals).map(months => {
       const totalPlanned = goals.reduce((sum, goal) => sum + goal.plannedMonthly, 0);
-      return { year: index + 1, value: goals.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + monthly * months * (goal.plannedMonthly > 0 ? goal.plannedMonthly / Math.max(1, totalPlanned) : 0)), 0) };
+      return { year: Math.ceil(months / 12), label: formatMonthsLabel(months), value: goals.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + monthly * months * (goal.plannedMonthly > 0 ? goal.plannedMonthly / Math.max(1, totalPlanned) : 0)), 0) };
     });
-    const factForecastPoints = (goals: GoalPlan[]) => goals.length ? Array.from({ length: 5 }, (_, index) => {
-      const months = (index + 1) * 12;
-      return { year: index + 1, value: goals.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + goal.actualMonthly * months), 0) };
+    const factForecastPoints = (goals: GoalPlan[]) => goals.length ? getGoalForecastMonths(goals).map(months => {
+      return { year: Math.ceil(months / 12), label: formatMonthsLabel(months), value: goals.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + goal.actualMonthly * months), 0) };
     }) : [];
     const familyGoalPlans = goalPlans.filter(goal => goal.kind === 'family');
     const personalGoalPlans = goalPlans.filter(goal => goal.kind !== 'family');
