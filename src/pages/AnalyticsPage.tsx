@@ -206,11 +206,12 @@ function getGoalPlans(familyGoals: FamilyGoal[], savingsGoals: SavingsGoal[], us
     return { id: `family-${goal.id}`, title: goal.title, target: goal.target, current: goal.currentSavings ?? 0, plannedMonthly: goal.isPaused ? 0 : goal.monthlyContribution ?? 0, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, monthsLeft: getMonthsUntilDate(goal.targetDate) ?? undefined, kind: 'family' as const };
   });
   const personal = savingsGoals.map(goal => {
+    const pension = getPensionDetails(goal);
     const target = getTargetAmount(goal);
     const monthsLeft = getMonthsUntil(goal, userAge);
     const plannedMonthly = monthsLeft ? Math.ceil(Math.max(0, target - goal.currentSavings) / monthsLeft) : 0;
     const activity = activitySummary(goal.activity);
-    return { id: `personal-${goal.id}`, title: goal.name, target, current: goal.currentSavings, plannedMonthly, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: goal.targetDate, monthsLeft: monthsLeft ?? undefined, kind: getPensionDetails(goal) ? 'pension' as const : 'personal' as const };
+    return { id: `personal-${goal.id}`, title: goal.name, target, current: goal.currentSavings, plannedMonthly, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: pension ? undefined : goal.targetDate, monthsLeft: pension ? undefined : (monthsLeft ?? undefined), kind: pension ? 'pension' as const : 'personal' as const };
   });
   return [...family, ...personal];
 }
