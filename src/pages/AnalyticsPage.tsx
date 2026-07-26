@@ -342,15 +342,17 @@ export default function AnalyticsPage() {
     const goalsActualThisMonth = goalPlans.reduce((sum, goal) => sum + goal.actualThisMonth, 0);
     const goalsActualMonthly = goalPlans.reduce((sum, goal) => sum + goal.actualMonthly, 0);
     const goalsProgress = goalsTarget > 0 ? Math.min(100, Math.round((goalsCurrent / goalsTarget) * 100)) : null;
-    const goalForecastPoints = (monthly: number) => Array.from({ length: 5 }, (_, index) => {
+    const goalForecastPoints = (goals: GoalPlan[], monthly: number) => Array.from({ length: 5 }, (_, index) => {
       const months = (index + 1) * 12;
-      return { year: index + 1, value: goalPlans.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + monthly * months * (goal.plannedMonthly > 0 ? goal.plannedMonthly / Math.max(1, goalsPlannedMonthly) : 0)), 0) };
+      const totalPlanned = goals.reduce((sum, goal) => sum + goal.plannedMonthly, 0);
+      return { year: index + 1, value: goals.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + monthly * months * (goal.plannedMonthly > 0 ? goal.plannedMonthly / Math.max(1, totalPlanned) : 0)), 0) };
     });
-    const planForecastPoints = goalForecastPoints(goalsPlannedMonthly);
-    const factForecastPoints = goalPlans.length ? Array.from({ length: 5 }, (_, index) => {
+    const factForecastPoints = (goals: GoalPlan[]) => goals.length ? Array.from({ length: 5 }, (_, index) => {
       const months = (index + 1) * 12;
-      return { year: index + 1, value: goalPlans.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + goal.actualMonthly * months), 0) };
+      return { year: index + 1, value: goals.reduce((sum, goal) => sum + Math.min(goal.target, goal.current + goal.actualMonthly * months), 0) };
     }) : [];
+    const familyGoalPlans = goalPlans.filter(goal => goal.kind === 'family');
+    const personalGoalPlans = goalPlans.filter(goal => goal.kind !== 'family');
 
     return {
       habits: sortedCategories.map(([name, amount], index) => ({
@@ -382,8 +384,10 @@ export default function AnalyticsPage() {
       monthlyExpenses,
       annualExpenses,
        simpleForecastPoints,
-       planForecastPoints,
-       factForecastPoints,
+       familyPlanForecastPoints: goalForecastPoints(familyGoalPlans, familyGoalPlans.reduce((sum, goal) => sum + goal.plannedMonthly, 0)),
+       familyFactForecastPoints: factForecastPoints(familyGoalPlans),
+       personalPlanForecastPoints: goalForecastPoints(personalGoalPlans, personalGoalPlans.reduce((sum, goal) => sum + goal.plannedMonthly, 0)),
+       personalFactForecastPoints: factForecastPoints(personalGoalPlans),
     };
   }, [filteredPurchases, purchases, range, rangeDates, transactions]);
 
@@ -530,9 +534,8 @@ export default function AnalyticsPage() {
                       <div><strong>{formatCurrency(goal.current)} из {formatCurrency(goal.target)}</strong><p>План {formatCurrency(goal.plannedMonthly)}/мес · факт {formatCurrency(goal.actualThisMonth)}/мес · {goal.actualThisMonth >= goal.plannedMonthly ? 'выполнен' : `не внесено ${formatCurrency(goal.plannedMonthly - goal.actualThisMonth)}`}</p></div>
                     </div>)}
                   </div>
-                  <p style={{ marginTop: 16, fontSize: '0.85rem', color: '#8aa2ca' }}>По плану: {formatCurrency(analytics.goalsPlannedMonthly)}/мес. По факту за последние три месяца: {formatCurrency(analytics.goalsActualMonthly)}/мес.</p>
-                  <ForecastChart points={analytics.planForecastPoints} label="Прогноз накоплений по плановому темпу" />
-                  {analytics.goalsActualMonthly > 0 ? <><p style={{ marginTop: 16, fontSize: '0.85rem', color: '#8aa2ca' }}>Прогноз по фактическому темпу</p><ForecastChart points={analytics.factForecastPoints} label="Прогноз накоплений по фактическому темпу" /></> : <p className="settings-note">Пока нет фактических пополнений за последние три месяца, поэтому прогноз по факту не строится.</p>}
+                  {analytics.goalPlans.some(goal => goal.kind === 'family') && <section style={{ marginTop: 16 }}><h4>Семейные цели</h4><p className="settings-note">Прогноз по плановому темпу.</p><ForecastChart points={analytics.familyPlanForecastPoints} label="Прогноз семейных целей по плановому темпу" />{analytics.goalPlans.some(goal => goal.kind === 'family' && goal.actualMonthly > 0) ? <><p className="settings-note">Прогноз по фактическому темпу.</p><ForecastChart points={analytics.familyFactForecastPoints} label="Прогноз семейных целей по фактическому темпу" /></> : <p className="settings-note">Нет фактических семейных пополнений за последние три месяца.</p>}</section>}
+                  {analytics.goalPlans.some(goal => goal.kind !== 'family') && <section style={{ marginTop: 16 }}><h4>Личные и пенсионные цели</h4><p className="settings-note">Прогноз по плановому темпу.</p><ForecastChart points={analytics.personalPlanForecastPoints} label="Прогноз личных и пенсионных целей по плановому темпу" />{analytics.goalPlans.some(goal => goal.kind !== 'family' && goal.actualMonthly > 0) ? <><p className="settings-note">Прогноз по фактическому темпу.</p><ForecastChart points={analytics.personalFactForecastPoints} label="Прогноз личных и пенсионных целей по фактическому темпу" /></> : <p className="settings-note">Нет фактических личных пополнений за последние три месяца.</p>}</section>}
                 </>
               )}
             </>
