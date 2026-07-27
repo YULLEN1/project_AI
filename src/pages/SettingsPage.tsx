@@ -113,8 +113,14 @@ function migrateLegacyFamilyExpenses() {
   const expenses = readJson<FamilyExpense[]>(storageKeys.familyExpenses, []);
   const legacyExpenses = members.filter(member => member.role === 'Расход');
   if (legacyExpenses.length && expenses.length === 0) {
-    window.localStorage.setItem(storageKeys.familyExpenses, JSON.stringify(legacyExpenses.map(member => ({ id: member.id, name: member.name, amount: member.contribute }))));
+    const migratedExpenses = legacyExpenses.map(member => ({ id: member.id, name: member.name, amount: member.contribute }));
+    window.localStorage.setItem(storageKeys.familyExpenses, JSON.stringify(migratedExpenses));
     window.localStorage.setItem(storageKeys.familyMembers, JSON.stringify(members.filter(member => member.role !== 'Расход')));
+    const payments = getPlannedPayments();
+    const additions = migratedExpenses
+      .filter(expense => !payments.some(payment => payment.id === `family-expense-${expense.id}`))
+      .map(expense => ({ id: `family-expense-${expense.id}`, title: expense.name, amount: expense.amount, dueDay: 1, category: 'Обязательные платежи', active: true }));
+    if (additions.length) savePlannedPayments([...payments, ...additions]);
   }
 }
 
@@ -354,11 +360,15 @@ export default function SettingsPage() {
       return;
     }
     const date = new Date().toISOString().slice(0, 10);
+    const transactionId = `goal-${id}-${Date.now()}`;
     handleSaveSavingsGoals(savingsGoals.map(goal => goal.id === id ? {
       ...goal,
       currentSavings: goal.currentSavings + amount,
-      activity: [...(goal.activity ?? []), { id: `${Date.now()}-${amount}`, amount, date }],
+      activity: [...(goal.activity ?? []), { id: transactionId, amount, date }],
     } : goal));
+    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение цели: ${savingsGoals.find(goal => goal.id === id)?.name || 'цель'}`, amount, date, accountId: 'main', goalId: id }];
+    setTransactions(nextTransactions);
+    saveTransactions(nextTransactions);
     setMessage('Фактическое пополнение цели сохранено.');
   };
 
@@ -393,13 +403,22 @@ export default function SettingsPage() {
       setMessage('Для обязательного расхода укажите название и сумму больше нуля.');
       return;
     }
-    handleSaveFamilyExpenses([...familyExpenses, { id: `${Date.now()}-${expenseName.trim()}`, name: expenseName.trim(), amount }]);
+    const id = `${Date.now()}-${expenseName.trim()}`;
+    handleSaveFamilyExpenses([...familyExpenses, { id, name: expenseName.trim(), amount }]);
+    const nextPayments = [...plannedPayments, { id: `family-expense-${id}`, title: expenseName.trim(), amount, dueDay: 1, category: 'Обязательные платежи', active: true }];
+    setPlannedPayments(nextPayments);
+    savePlannedPayments(nextPayments);
     setExpenseName('');
     setExpenseAmount('');
   };
 
   const handleRemoveFamilyExpense = (id: string) => {
-    if (window.confirm('Удалить обязательный расход?')) handleSaveFamilyExpenses(familyExpenses.filter(expense => expense.id !== id));
+    if (window.confirm('Удалить обязательный расход?')) {
+      handleSaveFamilyExpenses(familyExpenses.filter(expense => expense.id !== id));
+      const nextPayments = plannedPayments.filter(payment => payment.id !== `family-expense-${id}`);
+      setPlannedPayments(nextPayments);
+      savePlannedPayments(nextPayments);
+    }
   };
 
   const handleAddFamilyGoal = (e: FormEvent) => {

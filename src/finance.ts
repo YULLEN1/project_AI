@@ -19,6 +19,7 @@ export type Transaction = {
   toAccountId?: string;
   category?: string;
   note?: string;
+  goalId?: string;
 };
 
 export type PlannedPayment = {
@@ -35,6 +36,7 @@ const keys = {
   transactions: 'moneypilot-transactions',
   plannedPayments: 'moneypilot-planned-payments',
   migrated: 'moneypilot-finance-migrated-v1',
+  paymentsMigrated: 'moneypilot-planned-payments-migrated-v2',
 };
 
 export const defaultAccount: Account = { id: 'main', name: 'Основной счёт', openingBalance: 0, spendable: true };
@@ -65,6 +67,7 @@ export function ensureFinanceData() {
   const existingTransactions = readJson<Transaction[]>(keys.transactions, []);
   if (window.localStorage.getItem(keys.migrated)) {
     if (!existingAccounts.length) saveAccounts([defaultAccount]);
+    migrateFamilyExpensesToPlannedPayments();
     return;
   }
 
@@ -90,13 +93,27 @@ export function ensureFinanceData() {
   saveAccounts(accounts);
   saveTransactions(transactions);
   const payments = readJson<PlannedPayment[]>(keys.plannedPayments, []);
-  if (!payments.length && oldFamilyExpenses.length) {
-    savePlannedPayments(oldFamilyExpenses.flatMap((expense, index) => {
-      const amount = asAmount(expense.amount);
-      return amount ? [{ id: `legacy-payment-${expense.id || index}`, title: expense.name || 'Обязательный платёж', amount, dueDay: 1, category: 'Обязательные платежи', active: true }] : [];
-    }));
-  }
+  if (!payments.length && oldFamilyExpenses.length) savePlannedPayments(oldFamilyExpenses.flatMap((expense, index) => {
+    const amount = asAmount(expense.amount);
+    return amount ? [{ id: `family-expense-${expense.id || index}`, title: expense.name || 'Обязательный платёж', amount, dueDay: 1, category: 'Обязательные платежи', active: true }] : [];
+  }));
   window.localStorage.setItem(keys.migrated, 'true');
+  migrateFamilyExpensesToPlannedPayments();
+}
+
+function migrateFamilyExpensesToPlannedPayments() {
+  if (window.localStorage.getItem(keys.paymentsMigrated)) return;
+  const familyExpenses = readJson<Array<{ id?: string; name?: string; amount?: number }>>('moneypilot-family-expenses', []);
+  const payments = readJson<PlannedPayment[]>(keys.plannedPayments, []);
+  const additions = familyExpenses.flatMap((expense, index) => {
+    const id = `family-expense-${expense.id || index}`;
+    const amount = asAmount(expense.amount);
+    return amount && !payments.some(payment => payment.id === id)
+      ? [{ id, title: expense.name || 'Обязательный платёж', amount, dueDay: 1, category: 'Обязательные платежи', active: true }]
+      : [];
+  });
+  if (additions.length) savePlannedPayments([...payments, ...additions]);
+  window.localStorage.setItem(keys.paymentsMigrated, 'true');
 }
 
 export function getAccounts() { ensureFinanceData(); return readJson<Account[]>(keys.accounts, [defaultAccount]); }
@@ -137,6 +154,31 @@ export function plannedPaymentsUntil(payments: PlannedPayment[], date: string, t
     const due = `${date.slice(0, 7)}-${String(Math.min(payment.dueDay, lastDay)).padStart(2, '0')}`;
     return due >= date && due <= through;
   }).reduce((sum, payment) => sum + payment.amount, 0);
+}
+
+export type CashFlowSummary = {
+  income: number;
+  expenses: number;
+  goalContributions: number;
+  transfersIn: number;
+  transfersOut: number;
+  netCashFlow: number;
+};
+
+export function cashFlowSummary(transactions: Transaction[], from: string, through: string): CashFlowSummary {
+  const summary = transactions
+    .filter(item => item.status === 'completed' && item.date >= from && item.date <= through)
+    .reduce((result, item) => {
+      if (item.type === 'income') result.income += item.amount;
+      if (item.type === 'expense') result.expenses += item.amount;
+      if (item.type === 'goal-contribution') result.goalContributions += item.amount;
+      if (item.type === 'transfer') {
+        result.transfersOut += item.amount;
+        result.transfersIn += item.amount;
+      }
+      return result;
+    }, { income: 0, expenses: 0, goalContributions: 0, transfersIn: 0, transfersOut: 0 });
+  return { ...summary, netCashFlow: summary.income - summary.expenses - summary.goalContributions };
 }
 
 export function formatCurrency(value: number) { return `${Math.abs(Math.round(value)).toLocaleString('ru-RU')} ₽`; }

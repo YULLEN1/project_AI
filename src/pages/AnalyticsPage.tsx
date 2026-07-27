@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getTransactions, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -48,6 +48,8 @@ type CategoryTotal = {
   amount: number;
   color: string;
 };
+
+type IncomeEvent = { amount: number; date: string; status: 'expected' | 'received'; confidence: 'confirmed' | 'likely'; recurrence: 'once' | 'monthly'; };
 
 type GoalPlan = {
   id: string;
@@ -149,6 +151,19 @@ function readNumber(key: string): number | null {
   const raw = window.localStorage.getItem(key);
   const value = raw ? Number(raw) : NaN;
   return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function previousDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() - 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function transactionLabel(transaction: Transaction) {
+  if (transaction.type === 'income') return 'Поступление';
+  if (transaction.type === 'expense') return transaction.category || 'Расход';
+  if (transaction.type === 'goal-contribution') return 'Пополнение цели';
+  return 'Перевод между счетами';
 }
 
 function getPensionDetails(goal: SavingsGoal) {
@@ -370,7 +385,19 @@ export default function AnalyticsPage() {
         : 0;
 
     const income = readNumber('moneypilot-income');
-    const actualIncome = transactions.filter(event => event.type === 'income' && event.status === 'completed' && rangeDates.includes(event.date)).reduce((sum, event) => sum + event.amount, 0);
+    const fromDate = rangeDates[0];
+    const throughDate = rangeDates[rangeDates.length - 1];
+    const cashFlow = cashFlowSummary(transactions, fromDate, throughDate);
+    const accounts = getAccounts();
+    const openingBalance = Object.values(accountBalances(accounts, transactions, previousDate(fromDate))).reduce((sum, amount) => sum + amount, 0);
+    const closingBalance = Object.values(accountBalances(accounts, transactions, throughDate)).reduce((sum, amount) => sum + amount, 0);
+    const periodTransactions = transactions.filter(transaction => transaction.status === 'completed' && rangeDates.includes(transaction.date)).sort((a, b) => b.date.localeCompare(a.date));
+    const plannedPayments = getPlannedPayments().filter(payment => payment.active).reduce((sum, payment) => sum + rangeDates.filter(date => Number(date.slice(8, 10)) === Math.min(payment.dueDay, new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0).getDate())).length * payment.amount, 0);
+    const plannedIncome = readJson<IncomeEvent[]>('moneypilot-income-events', []).reduce((sum, event) => {
+      if (event.status !== 'expected' || event.confidence === 'likely') return sum;
+      if (event.recurrence === 'once') return rangeDates.includes(event.date) ? sum + event.amount : sum;
+      return sum + rangeDates.filter(date => Number(date.slice(8, 10)) === new Date(`${event.date}T00:00:00`).getDate()).length * event.amount;
+    }, 0);
     const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
     const userAge = readNumber('moneypilot-user-age');
     const savingsGoals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
@@ -418,8 +445,15 @@ export default function AnalyticsPage() {
       history: [...filteredPurchases].sort((a, b) => b.date.localeCompare(a.date)),
       total,
       income,
-      actualIncome,
-      estimatedBalance: income === null ? null : income - monthlyExpenses,
+       actualIncome: cashFlow.income,
+       cashFlow,
+       openingBalance,
+       closingBalance,
+       plannedPayments,
+       plannedIncome,
+       forecastClosingBalance: closingBalance + plannedIncome - plannedPayments,
+       periodTransactions,
+       estimatedBalance: income === null ? null : income - monthlyExpenses,
       trend,
       expenseChartPath,
       simpleForecast,
@@ -487,9 +521,9 @@ export default function AnalyticsPage() {
           <p>{range === 'today' ? 'Сегодня' : range === 'week' ? 'За выбранную неделю' : 'За выбранный месяц'}</p>
         </article>
         <article className="card total-card">
-          <span>Прогноз остатка за месяц</span>
+          <span>Сценарий бюджета на месяц</span>
           <strong>{configuredIncome === null ? 'Нет данных' : formatCurrency(configuredIncome - (analytics?.monthlyExpenses ?? 0))}</strong>
-          <p>{configuredIncome === null ? 'Укажите ориентир дохода для прогноза.' : `Сценарий: ориентир дохода минус средние расходы ${formatCurrency(analytics?.monthlyExpenses ?? 0)}/мес.`}</p>
+          <p>{configuredIncome === null ? 'Укажите ориентир дохода для сценария.' : `Ориентир дохода минус средние расходы ${formatCurrency(analytics?.monthlyExpenses ?? 0)}/мес. Это не факт.`}</p>
         </article>
       </section>
 
@@ -500,16 +534,42 @@ export default function AnalyticsPage() {
       {analytics && (
         <section className="content-grid">
           <div className="card large reveal-card">
+            <div className="card-head"><div><h2>Денежный поток: факт</h2><p className="settings-note">Только завершённые операции за выбранный период.</p></div></div>
+            <div className="settings-list">
+              <div className="settings-row"><span>Остаток на начало периода</span><strong>{formatCurrency(analytics.openingBalance)}</strong></div>
+              <div className="settings-row"><span>Поступления</span><strong>+{formatCurrency(analytics.cashFlow.income)}</strong></div>
+              <div className="settings-row"><span>Потребительские расходы</span><strong>−{formatCurrency(analytics.cashFlow.expenses)}</strong></div>
+              <div className="settings-row"><span>Пополнения целей</span><strong>−{formatCurrency(analytics.cashFlow.goalContributions)}</strong></div>
+              <div className="settings-row"><span>Переводы между счетами</span><strong>{formatCurrency(analytics.cashFlow.transfersIn)} ↔ {formatCurrency(analytics.cashFlow.transfersOut)}</strong></div>
+              <div className="settings-row"><strong>Чистый поток</strong><strong>{analytics.cashFlow.netCashFlow >= 0 ? '+' : '−'}{formatCurrency(Math.abs(analytics.cashFlow.netCashFlow))}</strong></div>
+              <div className="settings-row"><strong>Остаток на конец периода</strong><strong>{formatCurrency(analytics.closingBalance)}</strong></div>
+            </div>
+          </div>
+          <div className="card large reveal-card">
+            <div className="card-head"><div><h2>План до конца периода</h2><p className="settings-note">Подтверждённые ожидаемые поступления и активные обязательные платежи.</p></div></div>
+            <div className="settings-list">
+              <div className="settings-row"><span>Текущий остаток</span><strong>{formatCurrency(analytics.closingBalance)}</strong></div>
+              <div className="settings-row"><span>Ожидаемые поступления</span><strong>+{formatCurrency(analytics.plannedIncome)}</strong></div>
+              <div className="settings-row"><span>Обязательные платежи</span><strong>−{formatCurrency(analytics.plannedPayments)}</strong></div>
+              <div className="settings-row"><strong>Прогнозный остаток</strong><strong>{formatCurrency(analytics.forecastClosingBalance)}</strong></div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {analytics && (
+        <section className="content-grid">
+          <div className="card large reveal-card">
             <h2>Структура расходов</h2>
             <p className="settings-note">Круговая диаграмма по категориям за выбранный период.</p>
             <PieChart categories={analytics.categories} total={analytics.total} />
           </div>
           <div className="card large reveal-card">
-            <div className="card-head"><h2>История расходов</h2><span>{analytics.history.length} операций</span></div>
-            <div className="expense-history" tabIndex={0} aria-label="История расходов">
+            <div className="card-head"><h2>Журнал денежных потоков</h2><span>{analytics.periodTransactions.length} операций</span></div>
+            <div className="expense-history" tabIndex={0} aria-label="Журнал денежных потоков">
               <table>
-                <thead><tr><th>Дата</th><th>Покупка</th><th>Категория</th><th>Сумма</th></tr></thead>
-                <tbody>{analytics.history.map((item, index) => <tr key={`${item.date}-${item.title}-${index}`}><td>{formatDate(item.date)}</td><td>{item.title}</td><td>{item.category}</td><td>{formatCurrency(item.amount)}</td></tr>)}</tbody>
+                <thead><tr><th>Дата</th><th>Операция</th><th>Тип</th><th>Сумма</th></tr></thead>
+                <tbody>{analytics.periodTransactions.map(item => <tr key={item.id}><td>{formatDate(item.date)}</td><td>{item.title}</td><td>{transactionLabel(item)}</td><td>{item.type === 'income' ? '+' : item.type === 'transfer' ? '↔' : '−'}{formatCurrency(item.amount)}</td></tr>)}</tbody>
               </table>
             </div>
           </div>

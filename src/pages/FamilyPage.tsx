@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getTransactions, saveTransactions } from '../finance';
 
 type FamilyMember = { id: string; name: string; role: string; contribute: number; };
 type FamilyExpense = { id: string; name: string; amount: number; };
@@ -108,8 +109,10 @@ export default function FamilyPage() {
     event.preventDefault();
     const amount = Number(contributionAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
-    const activity: GoalActivity = { id: `${Date.now()}-${amount}`, amount, date: contributionDate, memberId: contributionMemberId || undefined };
+    const id = `family-goal-${goal.id}-${Date.now()}`;
+    const activity: GoalActivity = { id, amount, date: contributionDate, memberId: contributionMemberId || undefined };
     saveGoals(goals.map(item => item.id === goal.id ? { ...item, currentSavings: (item.currentSavings ?? 0) + amount, activity: [...(item.activity ?? []), activity] } : item));
+    saveTransactions([...getTransactions(), { id, type: 'goal-contribution', status: 'completed', title: `Пополнение семейной цели: ${goal.title}`, amount, date: contributionDate, accountId: 'main', goalId: `family-${goal.id}` }]);
     setContributionAmount('');
     setContributionGoalId(null);
   };
