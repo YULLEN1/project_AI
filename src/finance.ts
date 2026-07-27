@@ -165,6 +165,41 @@ export type CashFlowSummary = {
   netCashFlow: number;
 };
 
+export type GoalReserve = {
+  target: number;
+  currentSavings: number;
+  targetDate?: string;
+  targetAge?: number;
+  monthlyContribution?: number;
+  isPaused?: boolean;
+  type?: string;
+  name?: string;
+  monthlyPension?: number;
+  retirementAge?: number;
+  lifeExpectancy?: number;
+};
+
+export function plannedGoalReserve(goals: GoalReserve[], userAge: number | null) {
+  return goals.reduce((sum, goal) => {
+    if (goal.isPaused) return sum;
+    if (typeof goal.monthlyContribution === 'number') return sum + Math.max(0, goal.monthlyContribution);
+    const isPension = goal.monthlyPension || goal.type === 'Пенсия' || goal.name?.trim().toLowerCase() === 'пенсия';
+    const target = isPension
+      ? (goal.monthlyPension ?? goal.target) * Math.max(0, (goal.lifeExpectancy ?? 95) - (goal.retirementAge ?? goal.targetAge ?? 60)) * 12
+      : goal.target;
+    const months = isPension && userAge
+      ? ((goal.retirementAge ?? goal.targetAge ?? 60) - userAge) * 12
+      : goal.targetDate
+        ? (() => {
+          const targetDate = new Date(`${goal.targetDate.length === 7 ? `${goal.targetDate}-01` : goal.targetDate}T00:00:00`);
+          const now = new Date();
+          return (targetDate.getFullYear() - now.getFullYear()) * 12 + targetDate.getMonth() - now.getMonth();
+        })()
+        : goal.targetAge && userAge ? (goal.targetAge - userAge) * 12 : 0;
+    return months > 0 ? sum + Math.ceil(Math.max(0, target - goal.currentSavings) / months) : sum;
+  }, 0);
+}
+
 export function cashFlowSummary(transactions: Transaction[], from: string, through: string): CashFlowSummary {
   const summary = transactions
     .filter(item => item.status === 'completed' && item.date >= from && item.date <= through)

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getPlannedPayments, getTransactions, monthDates, plannedPaymentsUntil, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, monthDates, plannedGoalReserve, plannedPaymentsUntil, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -34,6 +34,16 @@ function readIncomeEvents() {
   if (!raw) return [];
   try { return JSON.parse(raw) as IncomeEvent[]; }
   catch { return []; }
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function getSavedRange() {
@@ -221,15 +231,24 @@ export default function DashboardPage() {
   const monthSpent = useMemo(() => calculateTotalSpent(transactions, `${monthKey}-01`, selectedDate), [transactions, monthKey, selectedDate]);
   const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate]);
   const plannedIncomeForMonth = useMemo(() => getPlannedIncomeForMonth(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
-  const remainingBudget = baseBudget !== null ? baseBudget - monthSpent : 0;
+  const familyGoals = readJson<Array<{ target: number; currentSavings?: number; monthlyContribution?: number; isPaused?: boolean }>>('moneypilot-family-goals', []);
+  const savingsGoals = readJson<Array<{ targetAmount: number; currentSavings: number; targetDate?: string; targetAge?: number; type?: string; name?: string; monthlyPension?: number; retirementAge?: number; lifeExpectancy?: number }>>('moneypilot-savings-goals', []);
+  const userAge = (() => { const value = Number(window.localStorage.getItem('moneypilot-user-age')); return Number.isFinite(value) && value > 0 ? value : null; })();
+  const plannedGoalsForMonth = plannedGoalReserve([
+    ...familyGoals.map(goal => ({ target: goal.target, currentSavings: goal.currentSavings ?? 0, monthlyContribution: goal.monthlyContribution, isPaused: goal.isPaused })),
+    ...savingsGoals.map(goal => ({ target: goal.targetAmount, currentSavings: goal.currentSavings, targetDate: goal.targetDate, targetAge: goal.targetAge, type: goal.type, name: goal.name, monthlyPension: goal.monthlyPension, retirementAge: goal.retirementAge, lifeExpectancy: goal.lifeExpectancy })),
+  ], userAge);
+  const goalContributionsToDate = cashFlowSummary(transactions, `${monthKey}-01`, selectedDate).goalContributions;
+  const goalsReserved = Math.max(0, plannedGoalsForMonth - goalContributionsToDate);
+  const remainingBudget = baseBudget !== null ? baseBudget - monthSpent - goalContributionsToDate : 0;
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const reserveThrough = nextIncome?.date ?? monthDates(selectedDate).end;
   const paymentsReserved = plannedPaymentsUntil(plannedPayments, selectedDate, reserveThrough);
-  const spendableBeforeIncome = Math.min(remainingBudget, availableCash - paymentsReserved);
+  const spendableBeforeIncome = Math.min(remainingBudget, availableCash - paymentsReserved - goalsReserved);
   const dailyBudget = baseBudget !== null && daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);
-  const plannedMonthBalance = Math.min(remainingBudget, availableCash + Math.max(0, plannedIncomeForMonth - actualIncomeToDate) - plannedPaymentsUntil(plannedPayments, selectedDate, monthDates(selectedDate).end));
+  const plannedMonthBalance = Math.min(remainingBudget, availableCash + Math.max(0, plannedIncomeForMonth - actualIncomeToDate) - plannedPaymentsUntil(plannedPayments, selectedDate, monthDates(selectedDate).end) - goalsReserved);
   const plannedDailyBudget = plannedMonthBalance / daysLeftInMonth;
   const healthScore = baseBudget !== null && filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
@@ -297,7 +316,8 @@ export default function DashboardPage() {
         <div className="settings-list">
           <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
           <div className="settings-row"><span>Резерв обязательных платежей до дохода</span><strong>−{formatCurrency(paymentsReserved)}</strong></div>
-          <div className="settings-row"><span>Остаток месячного лимита</span><strong>{formatCurrency(remainingBudget)}</strong></div>
+          <div className="settings-row"><span>Резерв личных и семейных целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
+          <div className="settings-row"><span>Остаток месячного лимита после расходов и целей</span><strong>{formatCurrency(remainingBudget)}</strong></div>
           <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
         </div>
       </section>}
