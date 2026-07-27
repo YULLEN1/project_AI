@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, monthDates, plannedGoalReserve, plannedPaymentsUntil, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, plannedGoalReserve, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -243,12 +243,12 @@ export default function DashboardPage() {
   const remainingBudget = baseBudget !== null ? baseBudget - monthSpent - goalContributionsToDate : 0;
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
-  const reserveThrough = nextIncome?.date ?? monthDates(selectedDate).end;
-  const paymentsReserved = plannedPaymentsUntil(plannedPayments, selectedDate, reserveThrough);
+  // Monthly obligations stay reserved until the user records their actual payment in the journal.
+  const paymentsReserved = plannedPayments.filter(payment => payment.active).reduce((sum, payment) => sum + payment.amount, 0);
   const spendableBeforeIncome = Math.min(remainingBudget, availableCash - paymentsReserved - goalsReserved);
   const dailyBudget = baseBudget !== null && daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);
-  const plannedMonthBalance = Math.min(remainingBudget, availableCash + Math.max(0, plannedIncomeForMonth - actualIncomeToDate) - plannedPaymentsUntil(plannedPayments, selectedDate, monthDates(selectedDate).end) - goalsReserved);
+  const plannedMonthBalance = Math.min(remainingBudget, availableCash + Math.max(0, plannedIncomeForMonth - actualIncomeToDate) - paymentsReserved - goalsReserved);
   const plannedDailyBudget = plannedMonthBalance / daysLeftInMonth;
   const healthScore = baseBudget !== null && filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
@@ -315,7 +315,7 @@ export default function DashboardPage() {
         <div className="card-head"><div><h2>Как рассчитано «можно потратить»</h2><p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p></div></div>
         <div className="settings-list">
           <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
-          <div className="settings-row"><span>Резерв обязательных платежей до дохода</span><strong>−{formatCurrency(paymentsReserved)}</strong></div>
+          <div className="settings-row"><span>Резерв обязательных платежей месяца</span><strong>−{formatCurrency(paymentsReserved)}</strong></div>
           <div className="settings-row"><span>Резерв личных и семейных целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
           <div className="settings-row"><span>Остаток месячного лимита после расходов и целей</span><strong>{formatCurrency(remainingBudget)}</strong></div>
           <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
