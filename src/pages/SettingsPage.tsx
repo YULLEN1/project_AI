@@ -319,10 +319,10 @@ export default function SettingsPage() {
     const parsedLifeExpectancy = Number(lifeExpectancy);
     const isPension = goalType === 'Пенсия';
     if (!goalName.trim() || (isPension
-      ? !Number.isFinite(parsedMonthlyPension) || parsedMonthlyPension <= 0 || !Number.isFinite(parsedRetirementAge) || !Number.isFinite(parsedLifeExpectancy) || parsedLifeExpectancy <= parsedRetirementAge
+      ? !Number.isFinite(parsedMonthlyPension) || parsedMonthlyPension <= 0 || userAge === null || userAge <= 0 || !Number.isFinite(parsedRetirementAge) || parsedRetirementAge <= userAge || !Number.isFinite(parsedLifeExpectancy) || parsedLifeExpectancy <= parsedRetirementAge
       : !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !goalDate)) {
       setMessage(isPension
-        ? 'Для пенсии укажите ежемесячную выплату, возраст выхода и ожидаемый возраст.'
+        ? 'Для пенсии укажите текущий возраст, возраст выхода, ежемесячную выплату и возраст окончания плана.'
         : 'Для цели укажите название, сумму и срок достижения.');
       return;
     }
@@ -339,6 +339,7 @@ export default function SettingsPage() {
       currentSavings: Number.isFinite(parsedSavings) && parsedSavings > 0 ? parsedSavings : 0,
     };
     handleSaveSavingsGoals([...savingsGoals, next]);
+    if (isPension && userAge !== null) window.localStorage.setItem(storageKeys.userAge, String(userAge));
     setGoalName('');
     setGoalAmount('');
     setGoalDate('');
@@ -744,9 +745,10 @@ export default function SettingsPage() {
               <label><span className="sr-only">Название цели</span><input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Например, отпуск в Японии" /></label>
               {goalType === 'Пенсия' ? (
                 <>
-                  <label><span className="sr-only">Желаемая пенсия в месяц</span><input value={monthlyPension} onChange={e => setMonthlyPension(e.target.value)} placeholder="Пенсия в месяц, ₽" type="number" inputMode="decimal" /></label>
-                  <label><span className="sr-only">Возраст выхода на пенсию</span><input value={retirementAge} onChange={e => setRetirementAge(e.target.value)} placeholder="Выход на пенсию, лет" type="number" min="1" /></label>
-                  <label><span className="sr-only">До какого возраста планировать</span><input value={lifeExpectancy} onChange={e => setLifeExpectancy(e.target.value)} placeholder="Планировать до, лет" type="number" min="1" /></label>
+                  <label>Текущий возраст<input value={userAge ?? ''} onChange={e => setUserAge(e.target.value ? Number(e.target.value) : null)} placeholder="Например, 35" type="number" min="1" max="100" /></label>
+                  <label>Желаемая пенсия в месяц<input value={monthlyPension} onChange={e => setMonthlyPension(e.target.value)} placeholder="Пенсия в месяц, ₽" type="number" inputMode="decimal" /></label>
+                  <label>Возраст выхода на пенсию<input value={retirementAge} onChange={e => setRetirementAge(e.target.value)} placeholder="Например, 60" type="number" min="1" /></label>
+                  <label>Планировать до возраста<input value={lifeExpectancy} onChange={e => setLifeExpectancy(e.target.value)} placeholder="Например, 95" type="number" min="1" /></label>
                 </>
               ) : (
                 <>
