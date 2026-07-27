@@ -226,7 +226,7 @@ function getGoalPlans(familyGoals: FamilyGoal[], savingsGoals: SavingsGoal[], us
     const monthsLeft = getMonthsUntil(goal, userAge);
     const plannedMonthly = monthsLeft ? Math.ceil(Math.max(0, target - goal.currentSavings) / monthsLeft) : 0;
     const activity = activitySummary(goal.activity);
-    return { id: `personal-${goal.id}`, title: goal.name, target, current: goal.currentSavings, plannedMonthly, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: pension ? undefined : goal.targetDate, monthsLeft: pension ? undefined : (monthsLeft ?? undefined), kind: pension ? 'pension' as const : 'personal' as const };
+    return { id: `personal-${goal.id}`, title: goal.name, target, current: goal.currentSavings, plannedMonthly, actualThisMonth: activity.thisMonth, actualMonthly: activity.monthly, deadline: pension ? `выход в ${pension.retirementAge} лет` : goal.targetDate, monthsLeft: monthsLeft ?? undefined, kind: pension ? 'pension' as const : 'personal' as const };
   });
   return [...family, ...personal];
 }

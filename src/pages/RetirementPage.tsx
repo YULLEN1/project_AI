@@ -148,7 +148,7 @@ export default function RetirementPage() {
                 <small>Осталось {formatCurrency(goal.remaining)} и {goal.monthsLeft} мес.</small>
               </div>
             ) : (
-              <div className="goal-plan-result warning">Укажите будущий срок цели в настройках, чтобы рассчитать ежемесячный взнос.</div>
+              <div className="goal-plan-result warning">{goal.pension ? 'Укажите ваш текущий возраст в настройках, чтобы рассчитать взнос к возрасту выхода на пенсию.' : 'Укажите будущий срок цели в настройках, чтобы рассчитать ежемесячный взнос.'}</div>
             )}
           </article>
         ))}
