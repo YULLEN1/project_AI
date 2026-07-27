@@ -740,7 +740,7 @@ export default function SettingsPage() {
                 <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
               )}
             </div>
-            <form className="inline-form" onSubmit={handleAddGoal}>
+            <form className={`inline-form ${goalType === 'Пенсия' ? 'pension-goal-form' : ''}`} onSubmit={handleAddGoal}>
               <label><span className="sr-only">Тип цели</span><select value={goalType} onChange={e => { const type = e.target.value as typeof GOAL_TYPES[number]; setGoalType(type); if (type === 'Пенсия' && !goalName.trim()) setGoalName('Пенсия'); }}>{GOAL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
               <label><span className="sr-only">Название цели</span><input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Например, отпуск в Японии" /></label>
               {goalType === 'Пенсия' ? (

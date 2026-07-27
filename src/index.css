@@ -786,6 +786,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .inline-form label { flex: 1; min-width: 140px; }
+.pension-goal-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+.pension-goal-form label { min-width: 0; }
+.pension-goal-form label > input,
+.pension-goal-form label > select { width: 100%; min-width: 0; box-sizing: border-box; margin-top: 6px; }
+.pension-goal-form button { width: 100%; }
 .purchase-form {
   display: grid;
   grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(120px, 1fr)) auto;
