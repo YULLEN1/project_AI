@@ -20,7 +20,10 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function formatCurrency(value: number) { return `${value.toLocaleString('ru-RU')} ₽`; }
-function getToday() { return new Date().toISOString().slice(0, 10); }
+function getToday() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
 function formatDate(value: string) { return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(`${value}T00:00:00`)); }
 function getMonthsUntil(targetDate?: string) {
   if (!targetDate) return null;

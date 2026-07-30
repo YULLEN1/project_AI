@@ -101,6 +101,11 @@ function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
 
+function getToday() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 const GOAL_TYPES = ['Крупная покупка', 'Резерв', 'Путешествие', 'Образование', 'Пенсия', 'Другое'] as const;
 
 function formatTargetDate(value?: string) {
@@ -210,7 +215,7 @@ export default function SettingsPage() {
   const [expenseAmount, setExpenseAmount] = useState('');
   const [incomeSource, setIncomeSource] = useState('');
   const [incomeAmount, setIncomeAmount] = useState('');
-  const [incomeDate, setIncomeDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [incomeDate, setIncomeDate] = useState(getToday);
   const [incomeStatus, setIncomeStatus] = useState<IncomeEvent['status']>('expected');
   const [incomeConfidence, setIncomeConfidence] = useState<IncomeEvent['confidence']>('confirmed');
   const [incomeRecurrence, setIncomeRecurrence] = useState<IncomeEvent['recurrence']>('once');
@@ -360,7 +365,7 @@ export default function SettingsPage() {
       setMessage('Введите сумму пополнения больше нуля.');
       return;
     }
-    const date = new Date().toISOString().slice(0, 10);
+    const date = getToday();
     const transactionId = `goal-${id}-${Date.now()}`;
     handleSaveSavingsGoals(savingsGoals.map(goal => goal.id === id ? {
       ...goal,
