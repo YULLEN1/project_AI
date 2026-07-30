@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, plannedGoalReserve, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, plannedGoalReserve, plannedPaymentsReserved, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -243,8 +243,7 @@ export default function DashboardPage() {
   const remainingBudget = baseBudget !== null ? baseBudget - monthSpent - goalContributionsToDate : 0;
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
-  // Monthly obligations stay reserved until the user records their actual payment in the journal.
-  const paymentsReserved = plannedPayments.filter(payment => payment.active).reduce((sum, payment) => sum + payment.amount, 0);
+  const paymentsReserved = plannedPaymentsReserved(plannedPayments, transactions, selectedDate);
   const spendableBeforeIncome = Math.min(remainingBudget, availableCash - paymentsReserved - goalsReserved);
   const dailyBudget = baseBudget !== null && daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);

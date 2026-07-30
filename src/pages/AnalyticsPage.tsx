@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, plannedGoalReserve, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, plannedGoalReserve, plannedPaymentsReserved, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -392,8 +392,7 @@ export default function AnalyticsPage() {
     const openingBalance = Object.values(accountBalances(accounts, transactions, previousDate(fromDate))).reduce((sum, amount) => sum + amount, 0);
     const closingBalance = Object.values(accountBalances(accounts, transactions, throughDate)).reduce((sum, amount) => sum + amount, 0);
     const periodTransactions = transactions.filter(transaction => transaction.status === 'completed' && rangeDates.includes(transaction.date)).sort((a, b) => b.date.localeCompare(a.date));
-    // Monthly obligations remain reserved even when their due day has passed: payment completion is recorded separately in the journal.
-    const plannedPayments = getPlannedPayments().filter(payment => payment.active).reduce((sum, payment) => sum + payment.amount, 0);
+    const plannedPayments = plannedPaymentsReserved(getPlannedPayments(), transactions, selectedDate);
     const plannedIncome = readJson<IncomeEvent[]>('moneypilot-income-events', []).reduce((sum, event) => {
       if (event.status !== 'expected' || event.confidence === 'likely') return sum;
       if (event.recurrence === 'once') return rangeDates.includes(event.date) ? sum + event.amount : sum;

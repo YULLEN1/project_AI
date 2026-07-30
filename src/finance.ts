@@ -156,6 +156,16 @@ export function plannedPaymentsUntil(payments: PlannedPayment[], date: string, t
   }).reduce((sum, payment) => sum + payment.amount, 0);
 }
 
+export function plannedPaymentsReserved(payments: PlannedPayment[], transactions: Transaction[], date: string) {
+  const { start } = monthDates(date);
+  return payments.filter(payment => payment.active).reduce((sum, payment) => {
+    const paid = transactions
+      .filter(transaction => transaction.type === 'expense' && transaction.status === 'completed' && transaction.date >= start && transaction.date <= date && transaction.title.trim() === payment.title.trim())
+      .reduce((paymentSum, transaction) => paymentSum + transaction.amount, 0);
+    return sum + Math.max(0, payment.amount - paid);
+  }, 0);
+}
+
 export type CashFlowSummary = {
   income: number;
   expenses: number;
