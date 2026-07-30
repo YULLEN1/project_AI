@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getTransactions } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getTransactions } from '../finance';
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -78,7 +78,9 @@ export default function GoalsPage() {
 
     const daysPassed = monthDates.filter(d => d <= today).length || 1;
     const monthPurchases = purchases.filter(p => monthDates.includes(p.date));
-    const totalSpent = monthPurchases.reduce((sum, p) => sum + p.amount, 0);
+    const consumerExpenses = monthPurchases.reduce((sum, p) => sum + p.amount, 0);
+    const goalContributions = cashFlowSummary(transactions, monthDates[0], monthDates[monthDates.length - 1]).goalContributions;
+    const totalSpent = consumerExpenses + goalContributions;
     const avgDailySpend = daysPassed > 0 ? totalSpent / daysPassed : 0;
     const projectedMonthEnd = avgDailySpend * monthDates.length;
     const currentMonthlySavings = Math.max(0, budget - projectedMonthEnd);
