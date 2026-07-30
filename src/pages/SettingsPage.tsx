@@ -374,6 +374,9 @@ export default function SettingsPage() {
       setMessage('Введите сумму пополнения больше нуля.');
       return;
     }
+    const goal = savingsGoals.find(item => item.id === id);
+    const excess = (goal?.currentSavings ?? 0) + amount - (goal?.targetAmount ?? Infinity);
+    if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const date = getToday();
     const balanceAfterContribution = (accountBalances(accounts, transactions, date).main || 0) - amount;
     if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
@@ -495,6 +498,9 @@ export default function SettingsPage() {
       setMessage('Введите сумму пополнения больше нуля.');
       return;
     }
+    const goal = familyGoalsList.find(item => item.id === id);
+    const excess = (goal?.currentSavings ?? 0) + amount - (goal?.target ?? Infinity);
+    if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount } : goal));
     setMessage('Пополнение семейной цели сохранено.');
   };

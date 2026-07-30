@@ -118,6 +118,8 @@ export default function FamilyPage() {
     event.preventDefault();
     const amount = Number(contributionAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
+    const excess = (goal.currentSavings ?? 0) + amount - goal.target;
+    if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const balanceAfterContribution = (accountBalances(getAccounts(), getTransactions(), contributionDate).main || 0) - amount;
     if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
     const id = `family-goal-${goal.id}-${Date.now()}`;
