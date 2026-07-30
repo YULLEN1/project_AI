@@ -273,6 +273,9 @@ export default function DashboardPage() {
       setFormError('Укажите название покупки и сумму больше нуля.');
       return;
     }
+    const transactionDate = normalizeDate(date);
+    const balanceAfterExpense = (accountBalances(accounts, transactions, transactionDate).main || 0) - parsedAmount;
+    if (balanceAfterExpense < 0 && !window.confirm(`После расхода баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterExpense))}. Сохранить операцию?`)) return;
 
     const next = [...transactions, {
       id: `${Date.now()}-${title.trim()}`,
@@ -281,7 +284,7 @@ export default function DashboardPage() {
       title: title.trim(),
       amount: parsedAmount,
       category,
-      date: normalizeDate(date),
+      date: transactionDate,
       accountId: 'main',
     }];
     setTransactions(next);

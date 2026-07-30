@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { getAccounts, getPlannedPayments, getTransactions, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
 
 const storageKeys = {
   budget: 'moneypilot-budget',
@@ -375,6 +375,8 @@ export default function SettingsPage() {
       return;
     }
     const date = getToday();
+    const balanceAfterContribution = (accountBalances(accounts, transactions, date).main || 0) - amount;
+    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
     const transactionId = `goal-${id}-${Date.now()}`;
     handleSaveSavingsGoals(savingsGoals.map(goal => goal.id === id ? {
       ...goal,
