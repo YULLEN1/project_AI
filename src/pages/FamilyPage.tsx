@@ -48,13 +48,13 @@ function priorityLabel(priority?: FamilyGoal['priority']) { return priority === 
 function getShares(goal: FamilyGoal, members: FamilyMember[], contribution: number) {
   const participants = (goal.memberIds ?? []).map(id => members.find(member => member.id === id)).filter(Boolean) as FamilyMember[];
   if (!participants.length) return [];
-  if (goal.distribution === 'custom') return participants.map(member => ({ name: member.name, amount: goal.memberContributions?.[member.id] ?? 0 }));
+  if (goal.distribution === 'custom') return participants.map(member => ({ id: member.id, name: member.name, amount: goal.memberContributions?.[member.id] ?? 0 }));
   if (goal.distribution === 'income') {
     const totalIncome = participants.filter(member => member.role === 'Доход').reduce((sum, member) => sum + member.contribute, 0);
-    if (totalIncome > 0) return participants.map(member => ({ name: member.name, amount: member.role === 'Доход' ? Math.round(contribution * member.contribute / totalIncome) : 0 }));
+    if (totalIncome > 0) return participants.map(member => ({ id: member.id, name: member.name, amount: member.role === 'Доход' ? Math.round(contribution * member.contribute / totalIncome) : 0 }));
   }
   const base = Math.floor(contribution / participants.length);
-  return participants.map((member, index) => ({ name: member.name, amount: base + (index === 0 ? contribution - base * participants.length : 0) }));
+  return participants.map((member, index) => ({ id: member.id, name: member.name, amount: base + (index === 0 ? contribution - base * participants.length : 0) }));
 }
 
 export default function FamilyPage() {
@@ -90,12 +90,17 @@ export default function FamilyPage() {
       const monthsLeft = getMonthsUntil(goal.targetDate);
       const requiredMonthly = monthsLeft ? Math.ceil(remaining / monthsLeft) : null;
       const progress = goal.target > 0 ? Math.min(100, Math.round((currentSavings / goal.target) * 100)) : 0;
-      const actualThisMonth = (goal.activity ?? []).filter(item => item.date.startsWith(currentMonth)).reduce((sum, item) => sum + item.amount, 0);
+      const monthActivities = (goal.activity ?? []).filter(item => item.date.startsWith(currentMonth));
+      const actualThisMonth = monthActivities.reduce((sum, item) => sum + item.amount, 0);
       const shares = getShares(goal, incomeMembers, plannedContribution);
+      const participantContributions = shares.map(share => ({
+        ...share,
+        actual: monthActivities.filter(item => item.memberId === share.id).reduce((sum, item) => sum + item.amount, 0),
+      }));
       const planStatus = remaining === 0 ? 'done' : goal.isPaused ? 'paused' : requiredMonthly === null ? 'missing-date' : plannedContribution >= requiredMonthly ? 'on-track' : 'at-risk';
       const factStatus = goal.isPaused || remaining === 0 || plannedContribution === 0 ? 'not-applicable' : actualThisMonth >= plannedContribution ? 'funded' : 'missing';
       const projectedDate = formatProjectedDate(remaining, plannedContribution);
-      return { ...goal, currentSavings, remaining, plannedContribution, monthsLeft, requiredMonthly, progress, actualThisMonth, shares, planStatus, factStatus, projectedDate };
+      return { ...goal, currentSavings, remaining, plannedContribution, monthsLeft, requiredMonthly, progress, actualThisMonth, participantContributions, planStatus, factStatus, projectedDate };
     }).sort((a, b) => {
       const statusOrder: Record<string, number> = { 'at-risk': 0, 'missing-date': 1, paused: 2, 'on-track': 3, done: 4 };
       const priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -150,7 +155,7 @@ export default function FamilyPage() {
             <div className={`family-goal-status ${goal.planStatus}`}>{goal.planStatus === 'done' ? 'Цель достигнута' : goal.planStatus === 'paused' ? 'План на паузе' : goal.planStatus === 'missing-date' ? 'Добавьте дедлайн, чтобы проверить план' : goal.planStatus === 'on-track' ? `План достаточен: ${formatCurrency(goal.plannedContribution)}/мес` : `Плану не хватает ${formatCurrency(Math.max(0, (goal.requiredMonthly ?? 0) - goal.plannedContribution))}/мес`}</div>
             {goal.factStatus !== 'not-applicable' && <div className={`family-goal-fact ${goal.factStatus}`}>{goal.factStatus === 'funded' ? `В этом месяце внесено ${formatCurrency(goal.actualThisMonth)}` : `Не внесено ${formatCurrency(Math.max(0, goal.plannedContribution - goal.actualThisMonth))} из плана этого месяца`}</div>}
             <p className="settings-note">Осталось {formatCurrency(goal.remaining)}{goal.requiredMonthly ? ` · необходимо ${formatCurrency(goal.requiredMonthly)}/мес` : ''} · текущий темп: {goal.projectedDate}</p>
-            <p className="settings-note">Вклад: {goal.shares.length ? goal.shares.map(share => `${share.name} ${formatCurrency(share.amount)}`).join(' · ') : 'участники не назначены'}</p>
+            <p className="settings-note">Вклад: {goal.participantContributions.length ? goal.participantContributions.map(share => `${share.name}: план ${formatCurrency(share.amount)}, внесено ${formatCurrency(share.actual)}`).join(' · ') : 'участники не назначены'}</p>
             <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(goal.memberIds?.[0] ?? ''); }}>Пополнить</button><button type="button" className="text-link" onClick={() => togglePause(goal.id)}>{goal.isPaused ? 'Возобновить' : 'Пауза'}</button><Link className="text-link" to="/settings">Изменить план</Link></div>
             {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /><button type="submit">Сохранить</button></form>}
           </article>
