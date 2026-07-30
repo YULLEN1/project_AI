@@ -315,6 +315,15 @@ export default function SettingsPage() {
     setMessage('Настройки сброшены. Укажите месячный лимит расходов.');
   };
 
+  const clearAllData = () => {
+    if (!window.confirm('Удалить все финансовые данные, цели, операции и историю ассистента? Учётная запись и тема сохранятся.')) return;
+    Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index))
+      .filter((key): key is string => Boolean(key) && key !== 'moneypilot-user' && key !== 'moneypilot-users' && key !== 'moneypilot-theme')
+      .filter(key => key.startsWith('moneypilot-'))
+      .forEach(key => window.localStorage.removeItem(key));
+    window.location.assign('/');
+  };
+
   const handleAddGoal = (e: FormEvent) => {
     e.preventDefault();
     const parsedAmount = Number(goalAmount);
@@ -678,6 +687,7 @@ export default function SettingsPage() {
               <button type="submit" className="primary-button">Сохранить настройки</button>
               <button type="button" className="ghost-button" onClick={clearPurchases}>Очистить расходы</button>
               <button type="button" className="ghost-button" onClick={resetDefaults}>Сбросить по умолчанию</button>
+              <button type="button" className="text-button" onClick={clearAllData}>Очистить данные</button>
             </div>
 
           </form>
