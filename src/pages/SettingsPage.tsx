@@ -230,6 +230,10 @@ export default function SettingsPage() {
   const [familyGoalMemberIds, setFamilyGoalMemberIds] = useState<string[]>([]);
   const [familyGoalDistribution, setFamilyGoalDistribution] = useState<NonNullable<FamilyGoal['distribution']>>('equal');
   const [familyGoalMemberContributions, setFamilyGoalMemberContributions] = useState<Record<string, string>>({});
+  const [familyGoalFundingId, setFamilyGoalFundingId] = useState<string | null>(null);
+  const [familyGoalFundingAmount, setFamilyGoalFundingAmount] = useState('');
+  const [familyGoalFundingMemberId, setFamilyGoalFundingMemberId] = useState('');
+  const [familyGoalFundingDate, setFamilyGoalFundingDate] = useState(getToday);
 
   const [goalName, setGoalName] = useState('');
   const [goalType, setGoalType] = useState<typeof GOAL_TYPES[number]>('Крупная покупка');
@@ -524,10 +528,9 @@ export default function SettingsPage() {
     saveTransactions(nextTransactions);
   };
 
-  const handleAddFamilyGoalSavings = (id: string) => {
-    const value = window.prompt('Сколько добавить в фонд этой цели?', '');
-    if (value === null) return;
-    const amount = Number(value);
+  const handleAddFamilyGoalSavings = (event: FormEvent, id: string) => {
+    event.preventDefault();
+    const amount = Number(familyGoalFundingAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setMessage('Введите сумму пополнения больше нуля.');
       return;
@@ -537,16 +540,21 @@ export default function SettingsPage() {
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const goalId = `family-${id}`;
     const accountId = goalAccountId(goalId);
-    const balanceAfterContribution = (accountBalances(accounts, transactions).main || 0) - amount;
+    const balanceAfterContribution = (accountBalances(accounts, transactions, familyGoalFundingDate).main || 0) - amount;
     if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
     const transactionId = `family-goal-${id}-${Date.now()}`;
-    handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount, activity: [...(goal.activity ?? []), { id: transactionId, amount, date: getToday() }] } : goal));
+    const date = familyGoalFundingDate;
+    handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount, activity: [...(goal.activity ?? []), { id: transactionId, amount, date, memberId: familyGoalFundingMemberId || undefined }] } : goal));
     const nextAccounts = accounts.some(account => account.id === accountId) ? accounts : [...accounts, { id: accountId, name: `Семейная цель: ${goal?.title || 'цель'}`, openingBalance: goal?.currentSavings ?? 0, spendable: false, goalId }];
-    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение семейной цели: ${goal?.title || 'цель'}`, amount, date: getToday(), accountId: 'main', toAccountId: accountId, goalId }];
+    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение семейной цели: ${goal?.title || 'цель'}`, amount, date, accountId: 'main', toAccountId: accountId, goalId }];
     setAccounts(nextAccounts);
     setTransactions(nextTransactions);
     saveAccounts(nextAccounts);
     saveTransactions(nextTransactions);
+    setFamilyGoalFundingId(null);
+    setFamilyGoalFundingAmount('');
+    setFamilyGoalFundingMemberId('');
+    setFamilyGoalFundingDate(getToday());
     setMessage('Пополнение семейной цели сохранено.');
   };
 
@@ -949,9 +957,10 @@ export default function SettingsPage() {
                     <p>{formatCurrency(goal.currentSavings ?? 0)} из {formatCurrency(goal.target)} · {goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : 'срок не указан'} · {goal.isPaused ? 'план на паузе' : `${formatCurrency(goal.monthlyContribution ?? 0)}/мес`}</p>
                   </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className="text-link text-button" onClick={() => handleAddFamilyGoalSavings(goal.id)}>Пополнить</button>
+                      <button type="button" className="text-link text-button" onClick={() => { setFamilyGoalFundingId(goal.id); setFamilyGoalFundingMemberId(goal.memberIds?.[0] ?? ''); }}>Пополнить</button>
                       <button type="button" className="text-button" onClick={() => handleRemoveFamilyGoal(goal.id)} aria-label={`Удалить ${goal.title}`}>Удалить</button>
                     </div>
+                    {familyGoalFundingId === goal.id && <form className="inline-form" onSubmit={event => handleAddFamilyGoalSavings(event, goal.id)}><label><span className="sr-only">Сумма пополнения</span><input autoFocus value={familyGoalFundingAmount} onChange={event => setFamilyGoalFundingAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" /></label><label><span className="sr-only">Участник</span><select value={familyGoalFundingMemberId} onChange={event => setFamilyGoalFundingMemberId(event.target.value)}><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label><label><span className="sr-only">Дата пополнения</span><input value={familyGoalFundingDate} onChange={event => setFamilyGoalFundingDate(event.target.value)} type="date" /></label><button type="submit">Сохранить</button></form>}
                 </div>
               )) : (
                 <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
