@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getTransactions, saveTransactions } from '../finance';
+import { accountBalances, getAccounts, getTransactions, goalAccountId, saveAccounts, saveTransactions } from '../finance';
 
 type FamilyMember = { id: string; name: string; role: string; contribute: number; };
 type FamilyExpense = { id: string; name: string; amount: number; };
@@ -30,7 +30,7 @@ function getMonthsUntil(targetDate?: string) {
   const now = new Date();
   const target = new Date(`${targetDate}T00:00:00`);
   const months = (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth();
-  return months > 0 ? months : null;
+  return months >= 0 ? months + 1 : null;
 }
 function formatDeadline(targetDate?: string) {
   if (!targetDate) return 'Срок не указан';
@@ -90,7 +90,7 @@ export default function FamilyPage() {
       const monthsLeft = getMonthsUntil(goal.targetDate);
       const requiredMonthly = monthsLeft ? Math.ceil(remaining / monthsLeft) : null;
       const progress = goal.target > 0 ? Math.min(100, Math.round((currentSavings / goal.target) * 100)) : 0;
-      const monthActivities = (goal.activity ?? []).filter(item => item.date.startsWith(currentMonth));
+      const monthActivities = (goal.activity ?? []).filter(item => item.date.startsWith(currentMonth) && item.date <= getToday());
       const actualThisMonth = monthActivities.reduce((sum, item) => sum + item.amount, 0);
       const shares = getShares(goal, incomeMembers, plannedContribution);
       const participantContributions = shares.map(share => ({
@@ -125,7 +125,11 @@ export default function FamilyPage() {
     const id = `family-goal-${goal.id}-${Date.now()}`;
     const activity: GoalActivity = { id, amount, date: contributionDate, memberId: contributionMemberId || undefined };
     saveGoals(goals.map(item => item.id === goal.id ? { ...item, currentSavings: (item.currentSavings ?? 0) + amount, activity: [...(item.activity ?? []), activity] } : item));
-    saveTransactions([...getTransactions(), { id, type: 'goal-contribution', status: 'completed', title: `Пополнение семейной цели: ${goal.title}`, amount, date: contributionDate, accountId: 'main', goalId: `family-${goal.id}` }]);
+    const accounts = getAccounts();
+    const goalId = `family-${goal.id}`;
+    const accountId = goalAccountId(goalId);
+    if (!accounts.some(account => account.id === accountId)) saveAccounts([...accounts, { id: accountId, name: `Семейная цель: ${goal.title}`, openingBalance: goal.currentSavings ?? 0, spendable: false, goalId }]);
+    saveTransactions([...getTransactions(), { id, type: 'goal-contribution', status: 'completed', title: `Пополнение семейной цели: ${goal.title}`, amount, date: contributionDate, accountId: 'main', toAccountId: accountId, goalId }]);
     setContributionAmount('');
     setContributionGoalId(null);
   };

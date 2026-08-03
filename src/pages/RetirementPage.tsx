@@ -54,7 +54,7 @@ function getMonthsUntil(goal: SavingsGoal, userAge?: number | null) {
     const now = new Date();
     const target = new Date(`${targetDate}T00:00:00`);
     const months = (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth();
-    return months > 0 ? months : null;
+    return months >= 0 ? months + 1 : null;
   }
   if (targetAge && userAge) {
     const months = (targetAge - userAge) * 12;

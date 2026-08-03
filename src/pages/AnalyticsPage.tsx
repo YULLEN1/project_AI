@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, plannedGoalReserve, plannedPaymentsReserved, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, plannedGoalReserve, plannedPaymentsReserved, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -95,16 +95,15 @@ function getSavedSelectedDate() {
   const today = getLocalToday();
   if (typeof window === 'undefined') return today;
   const raw = window.localStorage.getItem('moneypilot-selectedDate');
-  return raw === today ? raw : today;
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : today;
 }
 
 function normalizeDate(value: string) {
-  const d = new Date(value);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return value.slice(0, 10);
 }
 
 function getRangeDates(base: string, range: RangeKey) {
-  const date = new Date(base);
+  const date = new Date(`${base}T00:00:00`);
   const dates: string[] = [];
   if (range === 'today') {
     dates.push(normalizeDate(base));
@@ -118,7 +117,7 @@ function getRangeDates(base: string, range: RangeKey) {
     for (let i = 0; i < 7; i += 1) {
       const current = new Date(start);
       current.setDate(start.getDate() + i);
-      dates.push(normalizeDate(current.toISOString()));
+      dates.push(`${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`);
     }
     return dates;
   }
@@ -160,6 +159,7 @@ function previousDate(value: string) {
 }
 
 function transactionLabel(transaction: Transaction) {
+  if (transaction.goalId) return 'Перевод в фонд цели';
   if (transaction.type === 'income') return 'Поступление';
   if (transaction.type === 'expense') return transaction.category || 'Расход';
   if (transaction.type === 'goal-contribution') return 'Пополнение цели';
@@ -199,7 +199,7 @@ function getMonthsUntilDate(targetDate?: string) {
   const date = targetDate.length === 7 ? `${targetDate}-01` : targetDate;
   const target = new Date(`${date}T00:00:00`);
   const months = (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth();
-  return Number.isFinite(months) && months > 0 ? months : null;
+  return Number.isFinite(months) && months >= 0 ? months + 1 : null;
 }
 
 function getTargetAmount(goal: SavingsGoal) {
@@ -213,8 +213,8 @@ function getGoalPlans(familyGoals: FamilyGoal[], savingsGoals: SavingsGoal[], us
   const threeMonthsAgo = new Date(`${currentMonth}-01T00:00:00`);
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 2);
   const activitySummary = (activity: Array<{ amount: number; date: string }> = []) => ({
-    thisMonth: activity.filter(item => item.date.startsWith(currentMonth)).reduce((sum, item) => sum + item.amount, 0),
-    monthly: activity.filter(item => new Date(`${item.date}T00:00:00`) >= threeMonthsAgo).reduce((sum, item) => sum + item.amount, 0) / 3,
+    thisMonth: activity.filter(item => item.date.startsWith(currentMonth) && item.date <= today).reduce((sum, item) => sum + item.amount, 0),
+    monthly: activity.filter(item => item.date <= today && new Date(`${item.date}T00:00:00`) >= threeMonthsAgo).reduce((sum, item) => sum + item.amount, 0) / 3,
   });
   const family = familyGoals.map(goal => {
     const activity = activitySummary(goal.activity);
@@ -406,7 +406,7 @@ export default function AnalyticsPage() {
       ...savingsGoals.map(goal => ({ target: goal.targetAmount, currentSavings: goal.currentSavings, targetDate: goal.targetDate, targetAge: goal.targetAge, type: goal.type, name: goal.name, monthlyPension: goal.monthlyPension, retirementAge: goal.retirementAge, lifeExpectancy: goal.lifeExpectancy })),
     ], userAge);
     const monthStart = `${selectedDate.slice(0, 7)}-01`;
-    const actualGoalContributionsThisMonth = cashFlowSummary(transactions, monthStart, selectedDate).goalContributions;
+    const actualGoalContributionsThisMonth = goalContributionTotal(transactions, monthStart, selectedDate);
     const goalsReserved = Math.max(0, plannedGoals - actualGoalContributionsThisMonth);
 
     const daysInPeriod = range === 'today' ? 1 : range === 'week' ? 7 : rangeDates.length;
@@ -525,9 +525,9 @@ export default function AnalyticsPage() {
           <p>{analytics?.actualIncome ? 'Только фактически полученные поступления.' : 'Добавьте полученное поступление в настройках.'}</p>
         </article>
         <article className="card total-card expenses">
-          <span>Исходящий поток за период</span>
-          <strong>{analytics ? formatCurrency(analytics.cashFlow.expenses + analytics.cashFlow.goalContributions) : formatCurrency(0)}</strong>
-          <p>Расходы {formatCurrency(analytics?.cashFlow.expenses ?? 0)} + цели {formatCurrency(analytics?.cashFlow.goalContributions ?? 0)}.</p>
+          <span>Расходы за период</span>
+          <strong>{analytics ? formatCurrency(analytics.cashFlow.expenses) : formatCurrency(0)}</strong>
+          <p>Переводы в фонды целей: {formatCurrency(analytics?.cashFlow.goalContributions ?? 0)}.</p>
         </article>
         <article className="card total-card">
           <span>Сценарий бюджета на месяц</span>
@@ -548,7 +548,7 @@ export default function AnalyticsPage() {
               <div className="settings-row"><span>Остаток на начало периода</span><strong>{formatCurrency(analytics.openingBalance)}</strong></div>
               <div className="settings-row"><span>Поступления</span><strong>+{formatCurrency(analytics.cashFlow.income)}</strong></div>
               <div className="settings-row"><span>Потребительские расходы</span><strong>−{formatCurrency(analytics.cashFlow.expenses)}</strong></div>
-              <div className="settings-row"><span>Пополнения целей</span><strong>−{formatCurrency(analytics.cashFlow.goalContributions)}</strong></div>
+              <div className="settings-row"><span>Переводы в фонды целей</span><strong>↔{formatCurrency(analytics.cashFlow.goalContributions)}</strong></div>
               <div className="settings-row"><span>Переводы между счетами</span><strong>{formatCurrency(analytics.cashFlow.transfersIn)} ↔ {formatCurrency(analytics.cashFlow.transfersOut)}</strong></div>
               <div className="settings-row"><strong>Чистый поток</strong><strong>{analytics.cashFlow.netCashFlow >= 0 ? '+' : '−'}{formatCurrency(Math.abs(analytics.cashFlow.netCashFlow))}</strong></div>
               <div className="settings-row"><strong>Остаток на конец периода</strong><strong>{formatCurrency(analytics.closingBalance)}</strong></div>
@@ -579,7 +579,7 @@ export default function AnalyticsPage() {
             <div className="expense-history" tabIndex={0} aria-label="Журнал денежных потоков">
               <table>
                 <thead><tr><th>Дата</th><th>Операция</th><th>Тип</th><th>Сумма</th></tr></thead>
-                <tbody>{analytics.periodTransactions.map(item => <tr key={item.id}><td>{formatDate(item.date)}</td><td>{item.title}</td><td>{transactionLabel(item)}</td><td>{item.type === 'income' ? '+' : item.type === 'transfer' ? '↔' : '−'}{formatCurrency(item.amount)}</td></tr>)}</tbody>
+              <tbody>{analytics.periodTransactions.map(item => <tr key={item.id}><td>{formatDate(item.date)}</td><td>{item.title}</td><td>{transactionLabel(item)}</td><td>{item.type === 'income' ? '+' : item.goalId || item.type === 'transfer' ? '↔' : '−'}{formatCurrency(item.amount)}</td></tr>)}</tbody>
               </table>
             </div>
           </div>

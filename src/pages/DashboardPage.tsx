@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, plannedGoalReserve, plannedPaymentsReserved, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, plannedGoalReserve, plannedPaymentsReserved, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -59,20 +59,12 @@ function getSavedSelectedDate() {
   return raw === today ? raw : today;
 }
 
-function getSavedSavings() {
-  if (typeof window === 'undefined') return 0;
-  const raw = window.localStorage.getItem('moneypilot-savings');
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value >= 0 ? value : 0;
-}
-
 function normalizeDate(value: string) {
-  const d = new Date(value);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return value.slice(0, 10);
 }
 
 function getRangeDates(base: string, range: RangeKey) {
-  const date = new Date(base);
+  const date = new Date(`${base}T00:00:00`);
   const dates: string[] = [];
   if (range === 'today') {
     dates.push(normalizeDate(base));
@@ -86,7 +78,7 @@ function getRangeDates(base: string, range: RangeKey) {
     for (let i = 0; i < 7; i += 1) {
       const current = new Date(start);
       current.setDate(start.getDate() + i);
-      dates.push(normalizeDate(current.toISOString()));
+      dates.push(`${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`);
     }
     return dates;
   }
@@ -198,13 +190,14 @@ export default function DashboardPage() {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<CategoryKey>('Разное');
   const [date, setDate] = useState(getToday());
+  const [accountId, setAccountId] = useState('main');
+  const [paymentId, setPaymentId] = useState('');
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
   const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
   const [includeLikelyIncome, setIncludeLikelyIncome] = useState(false);
   const suggestion = getSavedSuggestion();
-  const savings = getSavedSavings();
 
   useEffect(() => {
     window.localStorage.setItem('moneypilot-range', range);
@@ -238,10 +231,11 @@ export default function DashboardPage() {
     ...familyGoals.map(goal => ({ target: goal.target, currentSavings: goal.currentSavings ?? 0, monthlyContribution: goal.monthlyContribution, isPaused: goal.isPaused })),
     ...savingsGoals.map(goal => ({ target: goal.targetAmount, currentSavings: goal.currentSavings, targetDate: goal.targetDate, targetAge: goal.targetAge, type: goal.type, name: goal.name, monthlyPension: goal.monthlyPension, retirementAge: goal.retirementAge, lifeExpectancy: goal.lifeExpectancy })),
   ], userAge);
-  const goalContributionsToDate = cashFlowSummary(transactions, `${monthKey}-01`, selectedDate).goalContributions;
+  const goalContributionsToDate = goalContributionTotal(transactions, `${monthKey}-01`, selectedDate);
   const goalsReserved = Math.max(0, plannedGoalsForMonth - goalContributionsToDate);
   const remainingBudget = baseBudget !== null ? baseBudget - monthSpent - goalContributionsToDate : 0;
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
+  const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const paymentsReserved = plannedPaymentsReserved(plannedPayments, transactions, selectedDate);
   const spendableBeforeIncome = Math.min(remainingBudget, availableCash - paymentsReserved - goalsReserved);
@@ -274,8 +268,9 @@ export default function DashboardPage() {
       return;
     }
     const transactionDate = normalizeDate(date);
-    const balanceAfterExpense = (accountBalances(accounts, transactions, transactionDate).main || 0) - parsedAmount;
-    if (balanceAfterExpense < 0 && !window.confirm(`После расхода баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterExpense))}. Сохранить операцию?`)) return;
+    const balanceAfterExpense = (accountBalances(accounts, transactions, transactionDate)[accountId] || 0) - parsedAmount;
+    const accountName = accounts.find(account => account.id === accountId)?.name || 'выбранного счёта';
+    if (balanceAfterExpense < 0 && !window.confirm(`После расхода баланс ${accountName} станет −${formatCurrency(Math.abs(balanceAfterExpense))}. Сохранить операцию?`)) return;
 
     const next = [...transactions, {
       id: `${Date.now()}-${title.trim()}`,
@@ -285,13 +280,15 @@ export default function DashboardPage() {
       amount: parsedAmount,
       category,
       date: transactionDate,
-      accountId: 'main',
+      accountId,
+      paymentId: paymentId || undefined,
     }];
     setTransactions(next);
     saveTransactions(next);
     setTitle('');
     setAmount('');
     setCategory('Разное');
+    setPaymentId('');
     setFormSuccess('Расход добавлен в выбранную дату.');
   };
 
@@ -462,10 +459,12 @@ export default function DashboardPage() {
           <form className="inline-form purchase-form" onSubmit={handleSubmit} noValidate>
             <label><span className="sr-only">Название покупки</span><input aria-invalid={Boolean(formError)} value={title} onChange={e => { setTitle(e.target.value); setCategory(detectCategory(e.target.value)); }} placeholder="Что купили?" /></label>
             <label><span className="sr-only">Сумма в рублях</span><input aria-invalid={Boolean(formError)} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма, ₽" type="number" min="1" inputMode="decimal" /></label>
-            <label><span className="sr-only">Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
+             <label><span className="sr-only">Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select></label>
-            <label><span className="sr-only">Дата расхода</span><input aria-label="Дата расхода" type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+             </select></label>
+             <label><span className="sr-only">Счёт списания</span><select value={accountId} onChange={e => setAccountId(e.target.value)}>{accounts.filter(account => account.spendable).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+             <label><span className="sr-only">Обязательный платёж</span><select value={paymentId} onChange={e => setPaymentId(e.target.value)}><option value="">Не обязательный платёж</option>{plannedPayments.filter(payment => payment.active).map(payment => <option key={payment.id} value={payment.id}>{payment.title}</option>)}</select></label>
+             <label><span className="sr-only">Дата расхода</span><input aria-label="Дата расхода" type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
             <button type="submit">Добавить</button>
           </form>
           {formError && <p className="form-feedback error" role="alert">{formError}</p>}

@@ -3,6 +3,7 @@ export type Account = {
   name: string;
   openingBalance: number;
   spendable: boolean;
+  goalId?: string;
 };
 
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'goal-contribution';
@@ -20,6 +21,7 @@ export type Transaction = {
   category?: string;
   note?: string;
   goalId?: string;
+  paymentId?: string;
 };
 
 export type PlannedPayment = {
@@ -40,6 +42,7 @@ const keys = {
 };
 
 export const defaultAccount: Account = { id: 'main', name: 'Основной счёт', openingBalance: 0, spendable: true };
+export function goalAccountId(goalId: string) { return `goal-account-${goalId}`; }
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -68,6 +71,7 @@ export function ensureFinanceData() {
   if (window.localStorage.getItem(keys.migrated)) {
     if (!existingAccounts.length) saveAccounts([defaultAccount]);
     migrateFamilyExpensesToPlannedPayments();
+    migrateGoalAccounts();
     return;
   }
 
@@ -99,6 +103,7 @@ export function ensureFinanceData() {
   }));
   window.localStorage.setItem(keys.migrated, 'true');
   migrateFamilyExpensesToPlannedPayments();
+  migrateGoalAccounts();
 }
 
 function migrateFamilyExpensesToPlannedPayments() {
@@ -116,6 +121,17 @@ function migrateFamilyExpensesToPlannedPayments() {
   window.localStorage.setItem(keys.paymentsMigrated, 'true');
 }
 
+function migrateGoalAccounts() {
+  const accounts = readJson<Account[]>(keys.accounts, []);
+  const personalGoals = readJson<Array<{ id?: string; name?: string; currentSavings?: number }>>('moneypilot-savings-goals', []);
+  const familyGoals = readJson<Array<{ id?: string; title?: string; currentSavings?: number }>>('moneypilot-family-goals', []);
+  const goalAccounts = [
+    ...personalGoals.flatMap(goal => goal.id ? [{ id: goal.id, name: goal.name || 'цель', balance: Math.max(0, Number(goal.currentSavings) || 0), family: false }] : []),
+    ...familyGoals.flatMap(goal => goal.id ? [{ id: `family-${goal.id}`, name: goal.title || 'цель', balance: Math.max(0, Number(goal.currentSavings) || 0), family: true }] : []),
+  ].filter(goal => !accounts.some(account => account.id === goalAccountId(goal.id)));
+  if (goalAccounts.length) saveAccounts([...accounts, ...goalAccounts.map(goal => ({ id: goalAccountId(goal.id), name: `${goal.family ? 'Семейная цель' : 'Цель'}: ${goal.name}`, openingBalance: goal.balance, spendable: false, goalId: goal.id }))]);
+}
+
 export function getAccounts() { ensureFinanceData(); return readJson<Account[]>(keys.accounts, [defaultAccount]); }
 export function getTransactions() { ensureFinanceData(); return readJson<Transaction[]>(keys.transactions, []); }
 export function getPlannedPayments() { ensureFinanceData(); return readJson<PlannedPayment[]>(keys.plannedPayments, []); }
@@ -128,6 +144,7 @@ export function accountBalances(accounts: Account[], transactions: Transaction[]
   transactions.filter(item => item.status === 'completed' && item.date <= throughDate).forEach(item => {
     if (item.type === 'income') balances[item.accountId] = (balances[item.accountId] || 0) + item.amount;
     if (item.type === 'expense' || item.type === 'goal-contribution') balances[item.accountId] = (balances[item.accountId] || 0) - item.amount;
+    if (item.type === 'goal-contribution' && item.toAccountId) balances[item.toAccountId] = (balances[item.toAccountId] || 0) + item.amount;
     if (item.type === 'transfer') {
       balances[item.accountId] = (balances[item.accountId] || 0) - item.amount;
       if (item.toAccountId) balances[item.toAccountId] = (balances[item.toAccountId] || 0) + item.amount;
@@ -159,8 +176,9 @@ export function plannedPaymentsUntil(payments: PlannedPayment[], date: string, t
 export function plannedPaymentsReserved(payments: PlannedPayment[], transactions: Transaction[], date: string) {
   const { start } = monthDates(date);
   return payments.filter(payment => payment.active).reduce((sum, payment) => {
+    const matchingPaymentCount = payments.filter(item => item.title.trim() === payment.title.trim()).length;
     const paid = transactions
-      .filter(transaction => transaction.type === 'expense' && transaction.status === 'completed' && transaction.date >= start && transaction.date <= date && transaction.title.trim() === payment.title.trim())
+      .filter(transaction => transaction.type === 'expense' && transaction.status === 'completed' && transaction.date >= start && transaction.date <= date && (transaction.paymentId === payment.id || (!transaction.paymentId && matchingPaymentCount === 1 && transaction.title.trim() === payment.title.trim())))
       .reduce((paymentSum, transaction) => paymentSum + transaction.amount, 0);
     return sum + Math.max(0, payment.amount - paid);
   }, 0);
@@ -203,7 +221,7 @@ export function plannedGoalReserve(goals: GoalReserve[], userAge: number | null)
         ? (() => {
           const targetDate = new Date(`${goal.targetDate.length === 7 ? `${goal.targetDate}-01` : goal.targetDate}T00:00:00`);
           const now = new Date();
-          return (targetDate.getFullYear() - now.getFullYear()) * 12 + targetDate.getMonth() - now.getMonth();
+          return (targetDate.getFullYear() - now.getFullYear()) * 12 + targetDate.getMonth() - now.getMonth() + 1;
         })()
         : goal.targetAge && userAge ? (goal.targetAge - userAge) * 12 : 0;
     return months > 0 ? sum + Math.ceil(Math.max(0, target - goal.currentSavings) / months) : sum;
@@ -211,8 +229,8 @@ export function plannedGoalReserve(goals: GoalReserve[], userAge: number | null)
 }
 
 export function cashFlowSummary(transactions: Transaction[], from: string, through: string): CashFlowSummary {
-  const summary = transactions
-    .filter(item => item.status === 'completed' && item.date >= from && item.date <= through)
+  const periodTransactions = transactions.filter(item => item.status === 'completed' && item.date >= from && item.date <= through);
+  const summary = periodTransactions
     .reduce((result, item) => {
       if (item.type === 'income') result.income += item.amount;
       if (item.type === 'expense') result.expenses += item.amount;
@@ -223,7 +241,16 @@ export function cashFlowSummary(transactions: Transaction[], from: string, throu
       }
       return result;
     }, { income: 0, expenses: 0, goalContributions: 0, transfersIn: 0, transfersOut: 0 });
-  return { ...summary, netCashFlow: summary.income - summary.expenses - summary.goalContributions };
+  const externalGoalContributions = periodTransactions
+    .filter(item => item.type === 'goal-contribution' && !item.toAccountId)
+    .reduce((sum, item) => sum + item.amount, 0);
+  return { ...summary, netCashFlow: summary.income - summary.expenses - externalGoalContributions };
+}
+
+export function goalContributionTotal(transactions: Transaction[], from: string, through: string) {
+  return transactions
+    .filter(item => item.goalId && item.status === 'completed' && item.date >= from && item.date <= through)
+    .reduce((sum, item) => sum + item.amount, 0);
 }
 
 export function formatCurrency(value: number) { return `${Math.abs(Math.round(value)).toLocaleString('ru-RU')} ₽`; }

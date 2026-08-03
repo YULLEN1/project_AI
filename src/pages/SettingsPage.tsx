@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { accountBalances, getAccounts, getPlannedPayments, getTransactions, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
 
 const storageKeys = {
   budget: 'moneypilot-budget',
@@ -220,6 +220,7 @@ export default function SettingsPage() {
   const [incomeStatus, setIncomeStatus] = useState<IncomeEvent['status']>('expected');
   const [incomeConfidence, setIncomeConfidence] = useState<IncomeEvent['confidence']>('confirmed');
   const [incomeRecurrence, setIncomeRecurrence] = useState<IncomeEvent['recurrence']>('once');
+  const [incomeAccountId, setIncomeAccountId] = useState('main');
   const [familyGoalTitle, setFamilyGoalTitle] = useState('');
   const [familyGoalTarget, setFamilyGoalTarget] = useState('');
   const [familyGoalSavings, setFamilyGoalSavings] = useState('');
@@ -358,6 +359,10 @@ export default function SettingsPage() {
       currentSavings: Number.isFinite(parsedSavings) && parsedSavings > 0 ? parsedSavings : 0,
     };
     handleSaveSavingsGoals([...savingsGoals, next]);
+    const goalAccount: Account = { id: goalAccountId(next.id), name: `Цель: ${next.name}`, openingBalance: next.currentSavings, spendable: false, goalId: next.id };
+    const nextAccounts = [...accounts, goalAccount];
+    setAccounts(nextAccounts);
+    saveAccounts(nextAccounts);
     if (isPension && userAge !== null) window.localStorage.setItem(storageKeys.userAge, String(userAge));
     setGoalName('');
     setGoalAmount('');
@@ -368,7 +373,17 @@ export default function SettingsPage() {
   };
 
   const handleRemoveGoal = (id: string) => {
-    if (window.confirm('Удалить эту цель накоплений?')) handleSaveSavingsGoals(savingsGoals.filter(g => g.id !== id));
+    if (!window.confirm('Удалить эту цель и вернуть её деньги на основной счёт?')) return;
+    handleSaveSavingsGoals(savingsGoals.filter(g => g.id !== id));
+    const goalAccount = accounts.find(account => account.id === goalAccountId(id));
+    const balance = goalAccount?.openingBalance ?? 0;
+    const nextAccounts = accounts.filter(account => account.id !== goalAccountId(id));
+    const nextTransactions = transactions.filter(transaction => transaction.goalId !== id || !transaction.toAccountId);
+    if (balance > 0) nextTransactions.push({ id: `goal-return-${id}-${Date.now()}`, type: 'income', status: 'completed', title: 'Возврат средств удалённой цели', amount: balance, date: getToday(), accountId: 'main' });
+    setAccounts(nextAccounts);
+    setTransactions(nextTransactions);
+    saveAccounts(nextAccounts);
+    saveTransactions(nextTransactions);
   };
 
   const handleAddSavingsGoalContribution = (id: string) => {
@@ -391,7 +406,11 @@ export default function SettingsPage() {
       currentSavings: goal.currentSavings + amount,
       activity: [...(goal.activity ?? []), { id: transactionId, amount, date }],
     } : goal));
-    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение цели: ${savingsGoals.find(goal => goal.id === id)?.name || 'цель'}`, amount, date, accountId: 'main', goalId: id }];
+    const accountId = goalAccountId(id);
+    const nextAccounts = accounts.some(account => account.id === accountId) ? accounts : [...accounts, { id: accountId, name: `Цель: ${goal?.name || 'цель'}`, openingBalance: goal?.currentSavings ?? 0, spendable: false, goalId: id }];
+    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение цели: ${goal?.name || 'цель'}`, amount, date, accountId: 'main', toAccountId: accountId, goalId: id }];
+    setAccounts(nextAccounts);
+    saveAccounts(nextAccounts);
     setTransactions(nextTransactions);
     saveTransactions(nextTransactions);
     setMessage('Фактическое пополнение цели сохранено.');
@@ -476,6 +495,10 @@ export default function SettingsPage() {
       activity: [],
     };
     handleSaveFamilyGoals([...familyGoalsList, next]);
+    const goalAccount: Account = { id: goalAccountId(`family-${next.id}`), name: `Семейная цель: ${next.title}`, openingBalance: next.currentSavings ?? 0, spendable: false, goalId: `family-${next.id}` };
+    const nextAccounts = [...accounts, goalAccount];
+    setAccounts(nextAccounts);
+    saveAccounts(nextAccounts);
     setFamilyGoalTitle('');
     setFamilyGoalTarget('');
     setFamilyGoalSavings('');
@@ -492,7 +515,19 @@ export default function SettingsPage() {
   };
 
   const handleRemoveFamilyGoal = (id: string) => {
-    if (window.confirm('Удалить семейную цель?')) handleSaveFamilyGoals(familyGoalsList.filter(g => g.id !== id));
+    if (!window.confirm('Удалить семейную цель и вернуть её деньги на основной счёт?')) return;
+    const goalId = `family-${id}`;
+    const accountId = goalAccountId(goalId);
+    const goalAccount = accounts.find(account => account.id === accountId);
+    const balance = goalAccount?.openingBalance ?? 0;
+    const nextAccounts = accounts.filter(account => account.id !== accountId);
+    const nextTransactions = transactions.filter(transaction => transaction.goalId !== goalId || !transaction.toAccountId);
+    if (balance > 0) nextTransactions.push({ id: `family-goal-return-${id}-${Date.now()}`, type: 'income', status: 'completed', title: 'Возврат средств удалённой семейной цели', amount: balance, date: getToday(), accountId: 'main' });
+    handleSaveFamilyGoals(familyGoalsList.filter(g => g.id !== id));
+    setAccounts(nextAccounts);
+    setTransactions(nextTransactions);
+    saveAccounts(nextAccounts);
+    saveTransactions(nextTransactions);
   };
 
   const handleAddFamilyGoalSavings = (id: string) => {
@@ -506,7 +541,18 @@ export default function SettingsPage() {
     const goal = familyGoalsList.find(item => item.id === id);
     const excess = (goal?.currentSavings ?? 0) + amount - (goal?.target ?? Infinity);
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
-    handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount } : goal));
+    const goalId = `family-${id}`;
+    const accountId = goalAccountId(goalId);
+    const balanceAfterContribution = (accountBalances(accounts, transactions).main || 0) - amount;
+    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
+    const transactionId = `family-goal-${id}-${Date.now()}`;
+    handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount, activity: [...(goal.activity ?? []), { id: transactionId, amount, date: getToday() }] } : goal));
+    const nextAccounts = accounts.some(account => account.id === accountId) ? accounts : [...accounts, { id: accountId, name: `Семейная цель: ${goal?.title || 'цель'}`, openingBalance: goal?.currentSavings ?? 0, spendable: false, goalId }];
+    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение семейной цели: ${goal?.title || 'цель'}`, amount, date: getToday(), accountId: 'main', toAccountId: accountId, goalId }];
+    setAccounts(nextAccounts);
+    setTransactions(nextTransactions);
+    saveAccounts(nextAccounts);
+    saveTransactions(nextTransactions);
     setMessage('Пополнение семейной цели сохранено.');
   };
 
@@ -557,7 +603,7 @@ export default function SettingsPage() {
     setIncomeEvents(next);
     window.localStorage.setItem(storageKeys.incomeEvents, JSON.stringify(next));
     if (event.status === 'received') {
-      const nextTransactions = [...transactions, { id: `income-${event.id}`, type: 'income' as const, status: 'completed' as const, title: event.source, amount: event.amount, date: event.date, accountId: 'main' }];
+      const nextTransactions = [...transactions, { id: `income-${event.id}`, type: 'income' as const, status: 'completed' as const, title: event.source, amount: event.amount, date: event.date, accountId: incomeAccountId }];
       setTransactions(nextTransactions);
       saveTransactions(nextTransactions);
     }
@@ -613,9 +659,31 @@ export default function SettingsPage() {
   };
 
   const removeTransaction = (id: string) => {
+    const transaction = transactions.find(item => item.id === id);
+    if (!transaction) return;
     const next = transactions.filter(transaction => transaction.id !== id);
     setTransactions(next);
     saveTransactions(next);
+    if (transaction.type === 'income' && transaction.id.startsWith('income-')) {
+      const eventId = transaction.id.slice('income-'.length);
+      const nextEvents = incomeEvents.filter(event => event.id !== eventId);
+      setIncomeEvents(nextEvents);
+      window.localStorage.setItem(storageKeys.incomeEvents, JSON.stringify(nextEvents));
+    }
+    if (transaction.goalId) {
+      if (transaction.goalId.startsWith('family-')) {
+        const goalId = transaction.goalId.slice('family-'.length);
+        handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === goalId ? { ...goal, currentSavings: Math.max(0, (goal.currentSavings ?? 0) - transaction.amount), activity: (goal.activity ?? []).filter(activity => activity.id !== id) } : goal));
+      } else {
+        handleSaveSavingsGoals(savingsGoals.map(goal => goal.id === transaction.goalId ? { ...goal, currentSavings: Math.max(0, goal.currentSavings - transaction.amount), activity: (goal.activity ?? []).filter(activity => activity.id !== id) } : goal));
+      }
+      if (!transaction.toAccountId) {
+        const accountId = goalAccountId(transaction.goalId);
+        const nextAccounts = accounts.map(account => account.id === accountId ? { ...account, openingBalance: Math.max(0, account.openingBalance - transaction.amount) } : account);
+        setAccounts(nextAccounts);
+        saveAccounts(nextAccounts);
+      }
+    }
   };
 
   const handleRemoveIncomeEvent = (id: string) => {
@@ -732,7 +800,8 @@ export default function SettingsPage() {
               <label><span className="sr-only">Сумма поступления</span><input value={incomeAmount} onChange={e => setIncomeAmount(e.target.value)} type="number" inputMode="decimal" placeholder="Сумма, ₽" /></label>
               <label><span className="sr-only">Дата поступления</span><input value={incomeDate} onChange={e => setIncomeDate(e.target.value)} type="date" /></label>
               <label><span className="sr-only">Статус поступления</span><select value={incomeStatus} onChange={e => setIncomeStatus(e.target.value as IncomeEvent['status'])}><option value="expected">Ожидается</option><option value="received">Получено</option></select></label>
-              {incomeStatus === 'expected' && <><label><span className="sr-only">Уверенность поступления</span><select value={incomeConfidence} onChange={e => setIncomeConfidence(e.target.value as IncomeEvent['confidence'])}><option value="confirmed">Подтверждено</option><option value="likely">Вероятно</option></select></label><label><span className="sr-only">Повторяемость поступления</span><select value={incomeRecurrence} onChange={e => setIncomeRecurrence(e.target.value as IncomeEvent['recurrence'])}><option value="once">Разово</option><option value="monthly">Каждый месяц</option></select></label></>}
+               {incomeStatus === 'expected' && <><label><span className="sr-only">Уверенность поступления</span><select value={incomeConfidence} onChange={e => setIncomeConfidence(e.target.value as IncomeEvent['confidence'])}><option value="confirmed">Подтверждено</option><option value="likely">Вероятно</option></select></label><label><span className="sr-only">Повторяемость поступления</span><select value={incomeRecurrence} onChange={e => setIncomeRecurrence(e.target.value as IncomeEvent['recurrence'])}><option value="once">Разово</option><option value="monthly">Каждый месяц</option></select></label></>}
+              {incomeStatus === 'received' && <label><span className="sr-only">Счёт поступления</span><select value={incomeAccountId} onChange={e => setIncomeAccountId(e.target.value)}>{accounts.filter(account => account.spendable).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>}
               <button type="submit">Добавить</button>
             </form>
             <p className="settings-note">Статус «Получено» увеличивает доступные деньги на главной. «Ожидается» показывает будущее поступление, но не добавляется к текущему остатку.</p>
@@ -757,7 +826,7 @@ export default function SettingsPage() {
           </div>
           <div className="settings-block">
             <div className="settings-block-head"><div><h4>Журнал фактических операций</h4><p>Завершённые операции меняют остатки счетов. Плановые операции и отменённые не входят в факт.</p></div></div>
-            <div className="settings-list">{transactions.length ? [...transactions].sort((a, b) => b.date.localeCompare(a.date)).map(transaction => <div className="settings-row" key={transaction.id}><div><strong>{transaction.title}</strong><p>{transaction.date} · {transaction.type === 'income' ? 'Поступление' : transaction.type === 'expense' ? transaction.category || 'Расход' : transaction.type} · {transaction.status === 'completed' ? 'Факт' : transaction.status}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{transaction.type === 'income' ? '+' : '−'}{formatCurrency(transaction.amount)}</strong><button className="text-button" type="button" onClick={() => removeTransaction(transaction.id)}>Удалить</button></div></div>) : <div className="empty-cell">Операции появятся после добавления расхода или полученного поступления.</div>}</div>
+            <div className="settings-list">{transactions.length ? [...transactions].sort((a, b) => b.date.localeCompare(a.date)).map(transaction => <div className="settings-row" key={transaction.id}><div><strong>{transaction.title}</strong><p>{transaction.date} · {transaction.goalId ? 'Перевод в фонд цели' : transaction.type === 'income' ? 'Поступление' : transaction.type === 'expense' ? transaction.category || 'Расход' : 'Перевод между счетами'} · {transaction.status === 'completed' ? 'Факт' : transaction.status}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{transaction.type === 'income' ? '+' : transaction.goalId || transaction.type === 'transfer' ? '↔' : '−'}{formatCurrency(transaction.amount)}</strong><button className="text-button" type="button" onClick={() => removeTransaction(transaction.id)}>Удалить</button></div></div>) : <div className="empty-cell">Операции появятся после добавления расхода или полученного поступления.</div>}</div>
           </div>
         </section>
       )}
