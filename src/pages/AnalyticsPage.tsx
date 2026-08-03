@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, plannedGoalReserve, plannedPaymentsReserved, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, monthDates, plannedGoalReserve, plannedPaymentsReserved, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -389,12 +389,17 @@ export default function AnalyticsPage() {
     const accounts = getAccounts();
     const openingBalance = Object.values(accountBalances(accounts, transactions, previousDate(fromDate))).reduce((sum, amount) => sum + amount, 0);
     const closingBalance = Object.values(accountBalances(accounts, transactions, throughDate)).reduce((sum, amount) => sum + amount, 0);
+    const currentBalances = accountBalances(accounts, transactions, selectedDate);
+    const availableBalance = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
+    const reservedBalance = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
     const periodTransactions = transactions.filter(transaction => transaction.status === 'completed' && rangeDates.includes(transaction.date)).sort((a, b) => b.date.localeCompare(a.date));
     const plannedPayments = plannedPaymentsReserved(getPlannedPayments(), transactions, selectedDate);
+    const { start: monthStart, end: monthEnd } = monthDates(selectedDate);
+    const monthRangeDates = getRangeDates(selectedDate, 'month');
     const plannedIncome = readJson<IncomeEvent[]>('moneypilot-income-events', []).reduce((sum, event) => {
       if (event.status !== 'expected' || event.confidence === 'likely') return sum;
-      if (event.recurrence === 'once') return rangeDates.includes(event.date) ? sum + event.amount : sum;
-      return sum + rangeDates.filter(date => Number(date.slice(8, 10)) === new Date(`${event.date}T00:00:00`).getDate()).length * event.amount;
+      if (event.recurrence === 'once') return event.date >= monthStart && event.date <= monthEnd ? sum + event.amount : sum;
+      return sum + monthRangeDates.filter(date => Number(date.slice(8, 10)) === new Date(`${event.date}T00:00:00`).getDate()).length * event.amount;
     }, 0);
     const familyGoals = readJson<FamilyGoal[]>('moneypilot-family-goals', []);
     const userAge = readNumber('moneypilot-user-age');
@@ -403,7 +408,6 @@ export default function AnalyticsPage() {
       ...familyGoals.map(goal => ({ target: goal.target, currentSavings: goal.currentSavings ?? 0, monthlyContribution: goal.monthlyContribution, isPaused: goal.isPaused })),
       ...savingsGoals.map(goal => ({ target: goal.targetAmount, currentSavings: goal.currentSavings, targetDate: goal.targetDate, targetAge: goal.targetAge, type: goal.type, name: goal.name, monthlyPension: goal.monthlyPension, retirementAge: goal.retirementAge, lifeExpectancy: goal.lifeExpectancy })),
     ], userAge);
-    const monthStart = `${selectedDate.slice(0, 7)}-01`;
     const actualGoalContributionsThisMonth = goalContributionTotal(transactions, monthStart, selectedDate);
     const goalsReserved = Math.max(0, plannedGoals - actualGoalContributionsThisMonth);
 
@@ -452,13 +456,15 @@ export default function AnalyticsPage() {
       income,
        actualIncome: cashFlow.income,
        cashFlow,
-       openingBalance,
-       closingBalance,
+        openingBalance,
+        closingBalance,
+        availableBalance,
+        reservedBalance,
         plannedPayments,
         plannedGoals,
         goalsReserved,
         plannedIncome,
-        forecastClosingBalance: closingBalance + plannedIncome - plannedPayments - goalsReserved,
+        forecastClosingBalance: availableBalance + plannedIncome - plannedPayments - goalsReserved,
        periodTransactions,
        estimatedBalance: income === null ? null : income - monthlyExpenses,
       trend,
@@ -549,13 +555,14 @@ export default function AnalyticsPage() {
               <div className="settings-row"><span>Переводы в фонды целей</span><strong>↔{formatCurrency(analytics.cashFlow.goalContributions)}</strong></div>
               <div className="settings-row"><span>Переводы между счетами</span><strong>{formatCurrency(analytics.cashFlow.transfersIn)} ↔ {formatCurrency(analytics.cashFlow.transfersOut)}</strong></div>
               <div className="settings-row"><strong>Чистый поток</strong><strong>{analytics.cashFlow.netCashFlow >= 0 ? '+' : '−'}{formatCurrency(Math.abs(analytics.cashFlow.netCashFlow))}</strong></div>
-              <div className="settings-row"><strong>Остаток на конец периода</strong><strong>{formatCurrency(analytics.closingBalance)}</strong></div>
+              <div className="settings-row"><strong>Остаток всех счетов на конец периода</strong><strong>{formatCurrency(analytics.closingBalance)}</strong></div>
             </div>
           </div>
           <div className="card large reveal-card">
-            <div className="card-head"><div><h2>План и резервы месяца</h2><p className="settings-note">Подтверждённые ожидаемые поступления, все месячные обязательства и невнесённые взносы в цели.</p></div></div>
+            <div className="card-head"><div><h2>План и резервы месяца</h2><p className="settings-note">Расчёт за {selectedDate.slice(0, 7)}: фактические доступные деньги, подтверждённые ожидаемые поступления и резервы месяца.</p></div></div>
             <div className="settings-list">
-              <div className="settings-row"><span>Текущий остаток</span><strong>{formatCurrency(analytics.closingBalance)}</strong></div>
+              <div className="settings-row"><span>Доступно на счетах</span><strong>{formatCurrency(analytics.availableBalance)}</strong></div>
+              <div className="settings-row"><span>В резервных счетах и фондах целей</span><strong>{formatCurrency(analytics.reservedBalance)}</strong></div>
               <div className="settings-row"><span>Ожидаемые поступления</span><strong>+{formatCurrency(analytics.plannedIncome)}</strong></div>
               <div className="settings-row"><span>Обязательные платежи</span><strong>−{formatCurrency(analytics.plannedPayments)}</strong></div>
               <div className="settings-row"><span>Резерв личных и семейных целей</span><strong>−{formatCurrency(analytics.goalsReserved)}</strong></div>
