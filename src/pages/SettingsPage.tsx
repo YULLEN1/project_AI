@@ -170,6 +170,7 @@ export default function SettingsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>(() => getTransactions());
   const [accountName, setAccountName] = useState('');
   const [accountOpeningBalance, setAccountOpeningBalance] = useState('');
+  const [mainAccountBalance, setMainAccountBalance] = useState('');
   const [paymentTitle, setPaymentTitle] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDueDay, setPaymentDueDay] = useState('');
@@ -250,6 +251,10 @@ export default function SettingsPage() {
     setUserAge(readNumberOrNull(storageKeys.userAge));
     setNotifications(readBoolean(storageKeys.notifications, true));
   }, []);
+
+  useEffect(() => {
+    setMainAccountBalance(String(accountBalances(accounts, transactions).main ?? 0));
+  }, [accounts, transactions]);
 
   const handleSaveSavingsGoals = (newGoals: SavingsGoal[]) => {
     setSavingsGoals(newGoals);
@@ -575,6 +580,22 @@ export default function SettingsPage() {
     setAccountOpeningBalance('');
   };
 
+  const handleSaveMainAccountBalance = (event: FormEvent) => {
+    event.preventDefault();
+    const balance = Number(mainAccountBalance);
+    if (!Number.isFinite(balance) || balance < 0) {
+      setMessage('Для основного счёта укажите остаток не меньше нуля.');
+      return;
+    }
+    const currentBalance = accountBalances(accounts, transactions).main ?? 0;
+    const next = accounts.map(account => account.id === 'main'
+      ? { ...account, openingBalance: account.openingBalance + balance - currentBalance }
+      : account);
+    setAccounts(next);
+    saveAccounts(next);
+    setMessage('Остаток основного счёта сохранён.');
+  };
+
   const handleAddPlannedPayment = (event: FormEvent) => {
     event.preventDefault();
     const amount = Number(paymentAmount);
@@ -721,8 +742,12 @@ export default function SettingsPage() {
             <div className="settings-list">{incomeEvents.length ? [...incomeEvents].sort((a, b) => b.date.localeCompare(a.date)).map(event => <div className="settings-row" key={event.id}><div><strong>{event.source}</strong><p>{event.status === 'received' ? 'Получено' : event.confidence === 'confirmed' ? 'Ожидается, подтверждено' : 'Ожидается, вероятно'} · {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${event.date}T00:00:00`))}{event.recurrence === 'monthly' ? ' · ежемесячно' : ''}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{formatCurrency(event.amount)}</strong><button className="text-button" type="button" onClick={() => handleRemoveIncomeEvent(event.id)}>Удалить</button></div></div>) : <div className="empty-cell">Добавьте первое ожидаемое или фактически полученное поступление.</div>}</div>
           </div>
           <div className="settings-block">
-            <div className="settings-block-head"><div><h4>Счета и стартовые остатки</h4><p>Остатки на доступных счетах формируют фактические деньги, а не лимит расходов.</p></div></div>
-            <div className="settings-list">{accounts.map(account => <div className="settings-row" key={account.id}><div><strong>{account.name}</strong><p>{account.spendable ? 'Учитывается в доступных деньгах' : 'Резервный счёт, не доступен для трат'}</p></div><strong>{formatCurrency(account.openingBalance)}</strong></div>)}</div>
+            <div className="settings-block-head"><div><h4>Счета и остатки</h4><p>Остатки на доступных счетах формируют фактические деньги, а не лимит расходов.</p></div></div>
+            <div className="settings-list">{accounts.map(account => <div className="settings-row" key={account.id}><div><strong>{account.name}</strong><p>{account.spendable ? 'Учитывается в доступных деньгах' : 'Резервный счёт, не доступен для трат'}</p></div><strong>{formatCurrency(accountBalances(accounts, transactions)[account.id] ?? 0)}</strong></div>)}</div>
+            <form className="inline-form" onSubmit={handleSaveMainAccountBalance}>
+              <label><span className="sr-only">Текущий остаток основного счёта</span><input value={mainAccountBalance} onChange={e => setMainAccountBalance(e.target.value)} placeholder="Текущий остаток основного счёта, ₽" type="number" min="0" inputMode="decimal" /></label>
+              <button type="submit">Сохранить остаток</button>
+            </form>
             <form className="inline-form" onSubmit={handleAddAccount}><input value={accountName} onChange={e => setAccountName(e.target.value)} placeholder="Название счёта" /><input value={accountOpeningBalance} onChange={e => setAccountOpeningBalance(e.target.value)} placeholder="Стартовый остаток, ₽" type="number" min="0" /><button type="submit">Добавить счёт</button></form>
           </div>
           <div className="settings-block">
