@@ -1,13 +1,20 @@
+export type AccountKind = 'cash' | 'reserve' | 'goal' | 'member';
+export type AccountScope = 'personal' | 'family';
+
 export type Account = {
   id: string;
   name: string;
   openingBalance: number;
   spendable: boolean;
+  /** Persisted for new data; omitted values are normalized when finance data is read or saved. */
+  kind?: AccountKind;
+  scope?: AccountScope;
   goalId?: string;
   memberId?: string;
+  archived?: boolean;
 };
 
-export type TransactionType = 'income' | 'expense' | 'transfer' | 'goal-contribution';
+export type TransactionType = 'income' | 'expense' | 'transfer' | 'goal-contribution' | 'reconciliation';
 export type TransactionStatus = 'completed' | 'planned' | 'cancelled';
 
 export type Transaction = {
@@ -23,6 +30,30 @@ export type Transaction = {
   note?: string;
   goalId?: string;
   paymentId?: string;
+  reconciliation?: {
+    expectedBalance: number;
+    actualBalance: number;
+    adjustment: number;
+  };
+};
+
+export type ReconciliationTransaction = Readonly<Transaction & {
+  type: 'reconciliation';
+  status: 'completed';
+  reconciliation: {
+    expectedBalance: number;
+    actualBalance: number;
+    adjustment: number;
+  };
+}>;
+
+export type ReconciliationInput = {
+  id?: string;
+  accountId: string;
+  expectedBalance: number;
+  actualBalance: number;
+  date?: string;
+  title?: string;
 };
 
 export type PlannedPayment = {
@@ -40,9 +71,10 @@ const keys = {
   plannedPayments: 'moneypilot-planned-payments',
   migrated: 'moneypilot-finance-migrated-v1',
   paymentsMigrated: 'moneypilot-planned-payments-migrated-v2',
+  accountMetadataMigrated: 'moneypilot-account-metadata-migrated-v3',
 };
 
-export const defaultAccount: Account = { id: 'main', name: 'Основной счёт', openingBalance: 0, spendable: true };
+export const defaultAccount: Account = { id: 'main', name: 'Основной счёт', openingBalance: 0, spendable: true, kind: 'cash', scope: 'personal' };
 export function goalAccountId(goalId: string) { return `goal-account-${goalId}`; }
 export function memberAccountId(memberId: string) { return `member-account-${memberId}`; }
 
@@ -56,9 +88,31 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function today() {
-  const now = new Date();
+export function dateOnly(value: Date | string = new Date()) {
+  if (typeof value === 'string') return value.slice(0, 10);
+  const now = value;
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+export function today() { return dateOnly(); }
+
+export function isDateOnlyInRange(date: string, from: string, through: string) {
+  const normalizedDate = dateOnly(date);
+  return normalizedDate >= dateOnly(from) && normalizedDate <= dateOnly(through);
+}
+
+function accountMetadata(account: Account): Pick<Account, 'kind' | 'scope'> {
+  const persistedKind = account.kind === 'cash' || account.kind === 'reserve' || account.kind === 'goal' || account.kind === 'member'
+    ? account.kind : undefined;
+  const kind = persistedKind || (account.goalId || account.id.startsWith('goal-account-') ? 'goal'
+    : account.memberId || account.id.startsWith('member-account-') ? 'member'
+      : account.id === 'reserve' || !account.spendable ? 'reserve' : 'cash');
+  const scope = (account.scope === 'personal' || account.scope === 'family') ? account.scope : (kind === 'member' || account.goalId?.startsWith('family-') ? 'family' : 'personal');
+  return { kind, scope };
+}
+
+function normalizeAccounts(accounts: Account[]) {
+  return accounts.map(account => ({ ...account, ...accountMetadata(account) }));
 }
 
 function asAmount(value: unknown) {
@@ -72,6 +126,10 @@ export function ensureFinanceData() {
   const existingTransactions = readJson<Transaction[]>(keys.transactions, []);
   if (window.localStorage.getItem(keys.migrated)) {
     if (!existingAccounts.length) saveAccounts([defaultAccount]);
+    if (!window.localStorage.getItem(keys.accountMetadataMigrated)) {
+      saveAccounts(existingAccounts.length ? existingAccounts : [defaultAccount]);
+      window.localStorage.setItem(keys.accountMetadataMigrated, 'true');
+    }
     migrateFamilyExpensesToPlannedPayments();
     migrateGoalAccounts();
     migrateMemberAccounts();
@@ -105,6 +163,7 @@ export function ensureFinanceData() {
     return amount ? [{ id: `family-expense-${expense.id || index}`, title: expense.name || 'Обязательный платёж', amount, dueDay: 1, category: 'Обязательные платежи', active: true }] : [];
   }));
   window.localStorage.setItem(keys.migrated, 'true');
+  window.localStorage.setItem(keys.accountMetadataMigrated, 'true');
   migrateFamilyExpensesToPlannedPayments();
   migrateGoalAccounts();
   migrateMemberAccounts();
@@ -145,16 +204,18 @@ function migrateMemberAccounts() {
   if (additions.length) saveAccounts([...accounts, ...additions]);
 }
 
-export function getAccounts() { ensureFinanceData(); return readJson<Account[]>(keys.accounts, [defaultAccount]); }
+export function getAccounts() { ensureFinanceData(); return normalizeAccounts(readJson<Account[]>(keys.accounts, [defaultAccount])); }
 export function getTransactions() { ensureFinanceData(); return readJson<Transaction[]>(keys.transactions, []); }
 export function getPlannedPayments() { ensureFinanceData(); return readJson<PlannedPayment[]>(keys.plannedPayments, []); }
-export function saveAccounts(accounts: Account[]) { window.localStorage.setItem(keys.accounts, JSON.stringify(accounts)); }
+export function saveAccounts(accounts: Account[]) { window.localStorage.setItem(keys.accounts, JSON.stringify(normalizeAccounts(accounts))); }
 export function saveTransactions(transactions: Transaction[]) { window.localStorage.setItem(keys.transactions, JSON.stringify(transactions)); }
 export function savePlannedPayments(payments: PlannedPayment[]) { window.localStorage.setItem(keys.plannedPayments, JSON.stringify(payments)); }
 
 export function accountBalances(accounts: Account[], transactions: Transaction[], throughDate = today()) {
   const balances = Object.fromEntries(accounts.map(account => [account.id, account.openingBalance])) as Record<string, number>;
-  transactions.filter(item => item.status === 'completed' && item.date <= throughDate).forEach(item => {
+  // A completed entry dated in the future is not part of any current balance.
+  const effectiveThroughDate = [dateOnly(throughDate), today()].sort()[0];
+  transactions.filter(item => item.status === 'completed' && dateOnly(item.date) <= effectiveThroughDate).forEach(item => {
     if (item.type === 'income') balances[item.accountId] = (balances[item.accountId] || 0) + item.amount;
     if (item.type === 'expense' || item.type === 'goal-contribution') balances[item.accountId] = (balances[item.accountId] || 0) - item.amount;
     if (item.type === 'goal-contribution' && item.toAccountId) balances[item.toAccountId] = (balances[item.toAccountId] || 0) + item.amount;
@@ -162,12 +223,33 @@ export function accountBalances(accounts: Account[], transactions: Transaction[]
       balances[item.accountId] = (balances[item.accountId] || 0) - item.amount;
       if (item.toAccountId) balances[item.toAccountId] = (balances[item.toAccountId] || 0) + item.amount;
     }
+    if (item.type === 'reconciliation') balances[item.accountId] = (balances[item.accountId] || 0) + item.amount;
   });
   return balances;
 }
 
+/** Creates a ledger adjustment; callers append it to transactions instead of changing an opening balance. */
+export function createReconciliationTransaction(input: ReconciliationInput): ReconciliationTransaction {
+  const expectedBalance = Number(input.expectedBalance);
+  const actualBalance = Number(input.actualBalance);
+  if (!input.accountId || !Number.isFinite(expectedBalance) || !Number.isFinite(actualBalance)) {
+    throw new Error('A reconciliation requires an account and finite expected and actual balances.');
+  }
+  const adjustment = actualBalance - expectedBalance;
+  return Object.freeze({
+    id: input.id || `reconciliation-${Date.now()}`,
+    type: 'reconciliation' as const,
+    status: 'completed' as const,
+    title: input.title || 'Сверка остатка',
+    amount: adjustment,
+    date: dateOnly(input.date || today()),
+    accountId: input.accountId,
+    reconciliation: Object.freeze({ expectedBalance, actualBalance, adjustment }),
+  });
+}
+
 export function totalSpent(transactions: Transaction[], from: string, through: string) {
-  return transactions.filter(item => item.type === 'expense' && item.status === 'completed' && item.date >= from && item.date <= through).reduce((sum, item) => sum + item.amount, 0);
+  return transactions.filter(item => item.type === 'expense' && item.status === 'completed' && isDateOnlyInRange(item.date, from, through)).reduce((sum, item) => sum + item.amount, 0);
 }
 
 export function monthDates(date: string) {
@@ -177,16 +259,49 @@ export function monthDates(date: string) {
   return { start: `${date.slice(0, 7)}-01`, end: `${date.slice(0, 7)}-${String(lastDay).padStart(2, '0')}`, lastDay };
 }
 
-export function plannedPaymentsUntil(payments: PlannedPayment[], date: string, through: string) {
-  return payments.filter(payment => {
-    if (!payment.active) return false;
-    const { lastDay } = monthDates(date);
-    const due = `${date.slice(0, 7)}-${String(Math.min(payment.dueDay, lastDay)).padStart(2, '0')}`;
-    return due >= date && due <= through;
-  }).reduce((sum, payment) => sum + payment.amount, 0);
+export type PlannedPaymentOccurrence = PlannedPayment & { dueDate: string };
+
+/** Returns every active monthly payment occurrence due in the inclusive date-only range. */
+export function plannedPaymentOccurrences(payments: PlannedPayment[], from: string, through: string): PlannedPaymentOccurrence[] {
+  const start = dateOnly(from);
+  const end = dateOnly(through);
+  if (start > end) return [];
+  const occurrences: PlannedPaymentOccurrence[] = [];
+  let month = `${start.slice(0, 7)}-01`;
+  while (month <= end) {
+    const { lastDay } = monthDates(month);
+    payments.filter(payment => payment.active).forEach(payment => {
+      const dueDate = `${month.slice(0, 7)}-${String(Math.min(payment.dueDay, lastDay)).padStart(2, '0')}`;
+      if (isDateOnlyInRange(dueDate, start, end)) occurrences.push({ ...payment, dueDate });
+    });
+    const nextMonth = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1);
+    month = dateOnly(nextMonth);
+  }
+  return occurrences;
 }
 
-export function plannedPaymentsReserved(payments: PlannedPayment[], transactions: Transaction[], date: string) {
+export function plannedPaymentsUntil(payments: PlannedPayment[], date: string, through: string) {
+  return plannedPaymentOccurrences(payments, date, through).reduce((sum, payment) => sum + payment.amount, 0);
+}
+
+export function plannedPaymentsReserved(payments: PlannedPayment[], transactions: Transaction[], date: string): number;
+export function plannedPaymentsReserved(payments: PlannedPayment[], transactions: Transaction[], from: string, through: string): number;
+export function plannedPaymentsReserved(payments: PlannedPayment[], transactions: Transaction[], date: string, through?: string) {
+  // Preserve the old dashboard contract: reserve every unpaid payment for date's month.
+  if (!through) return plannedPaymentsReservedForMonth(payments, transactions, date);
+  const occurrences = plannedPaymentOccurrences(payments, date, through);
+  const paidThrough = [dateOnly(through), today()].sort()[0];
+  return payments.filter(payment => payment.active).reduce((sum, payment) => {
+    const occurrenceTotal = occurrences.filter(occurrence => occurrence.id === payment.id).reduce((total, occurrence) => total + occurrence.amount, 0);
+    const matchingPaymentCount = payments.filter(item => item.title.trim() === payment.title.trim()).length;
+    const paid = transactions
+      .filter(transaction => transaction.type === 'expense' && transaction.status === 'completed' && dateOnly(transaction.date) >= dateOnly(date) && dateOnly(transaction.date) <= paidThrough && (transaction.paymentId === payment.id || (!transaction.paymentId && matchingPaymentCount === 1 && transaction.title.trim() === payment.title.trim())))
+      .reduce((paymentSum, transaction) => paymentSum + transaction.amount, 0);
+    return sum + Math.max(0, occurrenceTotal - paid);
+  }, 0);
+}
+
+function plannedPaymentsReservedForMonth(payments: PlannedPayment[], transactions: Transaction[], date: string) {
   const { start } = monthDates(date);
   return payments.filter(payment => payment.active).reduce((sum, payment) => {
     const matchingPaymentCount = payments.filter(item => item.title.trim() === payment.title.trim()).length;
@@ -242,7 +357,7 @@ export function plannedGoalReserve(goals: GoalReserve[], userAge: number | null)
 }
 
 export function cashFlowSummary(transactions: Transaction[], from: string, through: string): CashFlowSummary {
-  const periodTransactions = transactions.filter(item => item.status === 'completed' && item.date >= from && item.date <= through);
+  const periodTransactions = transactions.filter(item => item.status === 'completed' && isDateOnlyInRange(item.date, from, [dateOnly(through), today()].sort()[0]));
   const summary = periodTransactions
     .reduce((result, item) => {
       if (item.type === 'income') result.income += item.amount;
@@ -262,7 +377,7 @@ export function cashFlowSummary(transactions: Transaction[], from: string, throu
 
 export function goalContributionTotal(transactions: Transaction[], from: string, through: string) {
   return transactions
-    .filter(item => item.goalId && item.status === 'completed' && item.date >= from && item.date <= through)
+    .filter(item => item.goalId && item.status === 'completed' && isDateOnlyInRange(item.date, from, [dateOnly(through), today()].sort()[0]))
     .reduce((sum, item) => sum + item.amount, 0);
 }
 

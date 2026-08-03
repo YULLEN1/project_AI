@@ -69,7 +69,7 @@ export default function GoalsPage() {
     const accounts = getAccounts();
     const transactions = getTransactions();
     const balances = accountBalances(accounts, transactions);
-    const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
+    const savings = accounts.filter(account => account.kind === 'reserve' && account.scope === 'personal').reduce((sum, account) => sum + (balances[account.id] || 0), 0);
     const purchases = transactions.filter(transaction => transaction.type === 'expense' && transaction.status === 'completed').map(transaction => ({ amount: transaction.amount, category: transaction.category || 'Разное', date: transaction.date }));
     const suggestedItem = readJson<{ name: string; price: number }>('moneypilot-suggestedItem', { name: '', price: 0 });
     const monthDates = getMonthDates();

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, plannedGoalReserve, plannedPaymentsReserved, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, monthDates, plannedGoalReserve, plannedPaymentsReserved, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -214,7 +214,7 @@ export default function DashboardPage() {
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
   const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
-  const paymentsReserved = plannedPaymentsReserved(plannedPayments, transactions, selectedDate);
+  const paymentsReserved = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
   const spendableBeforeIncome = availableCash - paymentsReserved - goalsReserved;
   const dailyBudget = daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);

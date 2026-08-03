@@ -358,7 +358,7 @@ export default function AnalyticsPage() {
 
   const rangeDates = useMemo(() => getRangeDates(selectedDate, range), [selectedDate, range]);
   const filteredPurchases = useMemo(
-    () => purchases.filter(item => rangeDates.includes(item.date)),
+    () => purchases.filter(item => rangeDates.includes(item.date) && item.date <= selectedDate),
     [purchases, rangeDates],
   );
   const analytics = useMemo(() => {
@@ -384,7 +384,7 @@ export default function AnalyticsPage() {
 
     const income = readNumber('moneypilot-income');
     const fromDate = rangeDates[0];
-    const throughDate = rangeDates[rangeDates.length - 1];
+    const throughDate = selectedDate;
     const cashFlow = cashFlowSummary(transactions, fromDate, throughDate);
     const accounts = getAccounts();
     const openingBalance = Object.values(accountBalances(accounts, transactions, previousDate(fromDate))).reduce((sum, amount) => sum + amount, 0);
@@ -392,7 +392,7 @@ export default function AnalyticsPage() {
     const currentBalances = accountBalances(accounts, transactions, selectedDate);
     const availableBalance = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
     const reservedBalance = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
-    const periodTransactions = transactions.filter(transaction => transaction.status === 'completed' && rangeDates.includes(transaction.date)).sort((a, b) => b.date.localeCompare(a.date));
+    const periodTransactions = transactions.filter(transaction => transaction.status === 'completed' && rangeDates.includes(transaction.date) && transaction.date <= selectedDate).sort((a, b) => b.date.localeCompare(a.date));
     const plannedPayments = plannedPaymentsReserved(getPlannedPayments(), transactions, selectedDate);
     const { start: monthStart, end: monthEnd } = monthDates(selectedDate);
     const monthRangeDates = getRangeDates(selectedDate, 'month');

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
+import { accountBalances, createReconciliationTransaction, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
 
 const storageKeys = {
   budget: 'moneypilot-budget',
@@ -438,7 +438,18 @@ export default function SettingsPage() {
   };
 
   const handleRemoveMember = (id: string) => {
-    if (window.confirm('Удалить участника семьи?')) handleSaveMembers(members.filter(m => m.id !== id));
+    const accountId = memberAccountId(id);
+    const balance = accountBalances(accounts, transactions)[accountId] || 0;
+    if (balance !== 0) {
+      setMessage(`Сначала переведите или сведите к нулю остаток счёта участника: ${formatCurrency(balance)}.`);
+      return;
+    }
+    if (window.confirm('Удалить участника семьи? Его счёт будет архивирован, а история сохранится.')) {
+      handleSaveMembers(members.filter(m => m.id !== id));
+      const nextAccounts = accounts.map(account => account.id === accountId ? { ...account, spendable: false, archived: true } : account);
+      setAccounts(nextAccounts);
+      saveAccounts(nextAccounts);
+    }
   };
 
   const handleAddFamilyExpense = (e: FormEvent) => {
@@ -536,6 +547,10 @@ export default function SettingsPage() {
     const amount = Number(familyGoalFundingAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setMessage('Введите сумму пополнения больше нуля.');
+      return;
+    }
+    if (familyGoalFundingDate > getToday()) {
+      setMessage('Будущее пополнение нельзя учитывать как факт. Укажите сегодняшнюю или прошлую дату.');
       return;
     }
     const goal = familyGoalsList.find(item => item.id === id);
@@ -641,12 +656,15 @@ export default function SettingsPage() {
       return;
     }
     const currentBalance = accountBalances(accounts, transactions).main ?? 0;
-    const next = accounts.map(account => account.id === 'main'
-      ? { ...account, openingBalance: account.openingBalance + balance - currentBalance }
-      : account);
-    setAccounts(next);
-    saveAccounts(next);
-    setMessage('Остаток основного счёта сохранён.');
+    if (balance === currentBalance) {
+      setMessage('Остаток основного счёта уже совпадает с журналом.');
+      return;
+    }
+    const reconciliation = createReconciliationTransaction({ accountId: 'main', expectedBalance: currentBalance, actualBalance: balance, title: 'Сверка основного счёта' });
+    const nextTransactions = [...transactions, reconciliation];
+    setTransactions(nextTransactions);
+    saveTransactions(nextTransactions);
+    setMessage('Сверка остатка сохранена отдельной операцией.');
   };
 
   const handleAddPlannedPayment = (event: FormEvent) => {
@@ -833,7 +851,7 @@ export default function SettingsPage() {
           </div>
           <div className="settings-block">
             <div className="settings-block-head"><div><h4>Журнал фактических операций</h4><p>Завершённые операции меняют остатки счетов. Плановые операции и отменённые не входят в факт.</p></div></div>
-            <div className="settings-list">{transactions.length ? [...transactions].sort((a, b) => b.date.localeCompare(a.date)).map(transaction => <div className="settings-row" key={transaction.id}><div><strong>{transaction.title}</strong><p>{transaction.date} · {transaction.goalId ? 'Перевод в фонд цели' : transaction.type === 'income' ? 'Поступление' : transaction.type === 'expense' ? transaction.category || 'Расход' : 'Перевод между счетами'} · {accounts.find(account => account.id === transaction.accountId)?.name || 'Неизвестный счёт'}{transaction.toAccountId ? ` → ${accounts.find(account => account.id === transaction.toAccountId)?.name || 'Неизвестный счёт'}` : ''} · {transaction.status === 'completed' ? 'Факт' : transaction.status}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{transaction.type === 'income' ? '+' : transaction.goalId || transaction.type === 'transfer' ? '↔' : '−'}{formatCurrency(transaction.amount)}</strong><button className="text-button" type="button" onClick={() => removeTransaction(transaction.id)}>Удалить</button></div></div>) : <div className="empty-cell">Операции появятся после добавления расхода или полученного поступления.</div>}</div>
+            <div className="settings-list">{transactions.length ? [...transactions].sort((a, b) => b.date.localeCompare(a.date)).map(transaction => <div className="settings-row" key={transaction.id}><div><strong>{transaction.title}</strong><p>{transaction.date} · {transaction.type === 'reconciliation' ? 'Сверка остатка' : transaction.goalId ? 'Перевод в фонд цели' : transaction.type === 'income' ? 'Поступление' : transaction.type === 'expense' ? transaction.category || 'Расход' : 'Перевод между счетами'} · {accounts.find(account => account.id === transaction.accountId)?.name || 'Неизвестный счёт'}{transaction.toAccountId ? ` → ${accounts.find(account => account.id === transaction.toAccountId)?.name || 'Неизвестный счёт'}` : ''} · {transaction.status === 'completed' ? 'Факт' : transaction.status}</p></div><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><strong>{transaction.type === 'income' || transaction.type === 'reconciliation' && transaction.amount >= 0 ? '+' : transaction.goalId || transaction.type === 'transfer' ? '↔' : '−'}{formatCurrency(transaction.amount)}</strong><button className="text-button" type="button" onClick={() => removeTransaction(transaction.id)}>Удалить</button></div></div>) : <div className="empty-cell">Операции появятся после добавления расхода или полученного поступления.</div>}</div>
           </div>
         </section>
       )}

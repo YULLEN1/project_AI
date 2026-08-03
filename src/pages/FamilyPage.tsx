@@ -117,7 +117,7 @@ export default function FamilyPage() {
   const familyCashFlow = useMemo(() => {
     const date = getToday();
     const monthStart = `${date.slice(0, 7)}-01`;
-    const accounts = getAccounts().filter(account => account.spendable);
+    const accounts = getAccounts().filter(account => account.spendable && account.scope === 'family');
     const transactions = getTransactions().filter(transaction => transaction.status === 'completed' && transaction.date >= monthStart && transaction.date <= date);
     const balances = accountBalances(getAccounts(), getTransactions(), date);
     const rows = accounts.map(account => {
@@ -142,6 +142,7 @@ export default function FamilyPage() {
     event.preventDefault();
     const amount = Number(contributionAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
+    if (contributionDate > getToday()) return;
     const excess = (goal.currentSavings ?? 0) + amount - goal.target;
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const sourceAccountId = contributionMemberId ? memberAccountId(contributionMemberId) : 'main';
@@ -180,7 +181,7 @@ export default function FamilyPage() {
       </section>
 
       <section className="card large">
-        <div className="card-head"><div><h2>Фактические денежные потоки семьи</h2><p className="settings-note">Завершённые операции с {familyCashFlow.monthStart} по {familyCashFlow.date}. Переводы в цели остаются вашими деньгами, но исключаются из доступных счетов.</p></div></div>
+        <div className="card-head"><div><h2>Фактические денежные потоки семьи</h2><p className="settings-note">Завершённые операции семейных счетов с {familyCashFlow.monthStart} по {familyCashFlow.date}. Переводы в цели остаются вашими деньгами, но исключаются из доступных счетов.</p></div></div>
         <div className="family-summary" aria-label="Фактические денежные потоки">
           <article className="card total-card income"><span>Фактически поступило</span><strong>+{formatCurrency(familyCashFlow.income)}</strong></article>
           <article className="card total-card expenses"><span>Фактические расходы</span><strong>−{formatCurrency(familyCashFlow.expenses)}</strong></article>
