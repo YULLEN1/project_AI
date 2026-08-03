@@ -4,6 +4,7 @@ export type Account = {
   openingBalance: number;
   spendable: boolean;
   goalId?: string;
+  memberId?: string;
 };
 
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'goal-contribution';
@@ -43,6 +44,7 @@ const keys = {
 
 export const defaultAccount: Account = { id: 'main', name: 'Основной счёт', openingBalance: 0, spendable: true };
 export function goalAccountId(goalId: string) { return `goal-account-${goalId}`; }
+export function memberAccountId(memberId: string) { return `member-account-${memberId}`; }
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -72,6 +74,7 @@ export function ensureFinanceData() {
     if (!existingAccounts.length) saveAccounts([defaultAccount]);
     migrateFamilyExpensesToPlannedPayments();
     migrateGoalAccounts();
+    migrateMemberAccounts();
     return;
   }
 
@@ -104,6 +107,7 @@ export function ensureFinanceData() {
   window.localStorage.setItem(keys.migrated, 'true');
   migrateFamilyExpensesToPlannedPayments();
   migrateGoalAccounts();
+  migrateMemberAccounts();
 }
 
 function migrateFamilyExpensesToPlannedPayments() {
@@ -130,6 +134,15 @@ function migrateGoalAccounts() {
     ...familyGoals.flatMap(goal => goal.id ? [{ id: `family-${goal.id}`, name: goal.title || 'цель', balance: Math.max(0, Number(goal.currentSavings) || 0), family: true }] : []),
   ].filter(goal => !accounts.some(account => account.id === goalAccountId(goal.id)));
   if (goalAccounts.length) saveAccounts([...accounts, ...goalAccounts.map(goal => ({ id: goalAccountId(goal.id), name: `${goal.family ? 'Семейная цель' : 'Цель'}: ${goal.name}`, openingBalance: goal.balance, spendable: false, goalId: goal.id }))]);
+}
+
+function migrateMemberAccounts() {
+  const accounts = readJson<Account[]>(keys.accounts, []);
+  const members = readJson<Array<{ id?: string; name?: string; role?: string }>>('moneypilot-family-members', []);
+  const additions = members
+    .filter(member => member.id && member.role !== 'Расход' && !accounts.some(account => account.id === memberAccountId(member.id!)))
+    .map(member => ({ id: memberAccountId(member.id!), name: `Счёт: ${member.name || 'участник'}`, openingBalance: 0, spendable: true, memberId: member.id }));
+  if (additions.length) saveAccounts([...accounts, ...additions]);
 }
 
 export function getAccounts() { ensureFinanceData(); return readJson<Account[]>(keys.accounts, [defaultAccount]); }

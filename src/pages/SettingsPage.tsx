@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, saveAccounts, savePlannedPayments, saveTransactions, type Account, type PlannedPayment, type Transaction } from '../finance';
 
 const storageKeys = {
   budget: 'moneypilot-budget',
@@ -430,6 +430,9 @@ export default function SettingsPage() {
       color: '#37c7ff',
     };
     handleSaveMembers([...members, next]);
+    const nextAccounts = [...accounts, { id: memberAccountId(next.id), name: `Счёт: ${next.name}`, openingBalance: 0, spendable: true, memberId: next.id }];
+    setAccounts(nextAccounts);
+    saveAccounts(nextAccounts);
     setMemberName('');
     setMemberAmount('');
   };
@@ -540,13 +543,15 @@ export default function SettingsPage() {
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const goalId = `family-${id}`;
     const accountId = goalAccountId(goalId);
-    const balanceAfterContribution = (accountBalances(accounts, transactions, familyGoalFundingDate).main || 0) - amount;
-    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
+    const sourceAccountId = familyGoalFundingMemberId ? memberAccountId(familyGoalFundingMemberId) : 'main';
+    const sourceAccountName = accounts.find(account => account.id === sourceAccountId)?.name || 'основного счёта';
+    const balanceAfterContribution = (accountBalances(accounts, transactions, familyGoalFundingDate)[sourceAccountId] || 0) - amount;
+    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс ${sourceAccountName} станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
     const transactionId = `family-goal-${id}-${Date.now()}`;
     const date = familyGoalFundingDate;
     handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount, activity: [...(goal.activity ?? []), { id: transactionId, amount, date, memberId: familyGoalFundingMemberId || undefined }] } : goal));
     const nextAccounts = accounts.some(account => account.id === accountId) ? accounts : [...accounts, { id: accountId, name: `Семейная цель: ${goal?.title || 'цель'}`, openingBalance: goal?.currentSavings ?? 0, spendable: false, goalId }];
-    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение семейной цели: ${goal?.title || 'цель'}`, amount, date, accountId: 'main', toAccountId: accountId, goalId }];
+    const nextTransactions = [...transactions, { id: transactionId, type: 'goal-contribution' as const, status: 'completed' as const, title: `Пополнение семейной цели: ${goal?.title || 'цель'}`, amount, date, accountId: sourceAccountId, toAccountId: accountId, goalId }];
     setAccounts(nextAccounts);
     setTransactions(nextTransactions);
     saveAccounts(nextAccounts);
