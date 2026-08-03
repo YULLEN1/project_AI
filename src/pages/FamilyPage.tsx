@@ -114,6 +114,30 @@ export default function FamilyPage() {
     return { income, expenses, available: income - expenses, planned, actualThisMonth, fund, required, unallocated: income - expenses - planned, goalPlans };
   }, [members, familyExpenses, goals]);
 
+  const familyCashFlow = useMemo(() => {
+    const date = getToday();
+    const monthStart = `${date.slice(0, 7)}-01`;
+    const accounts = getAccounts().filter(account => account.spendable);
+    const transactions = getTransactions().filter(transaction => transaction.status === 'completed' && transaction.date >= monthStart && transaction.date <= date);
+    const balances = accountBalances(getAccounts(), getTransactions(), date);
+    const rows = accounts.map(account => {
+      const income = transactions.filter(transaction => transaction.type === 'income' && transaction.accountId === account.id).reduce((sum, transaction) => sum + transaction.amount, 0);
+      const expenses = transactions.filter(transaction => transaction.type === 'expense' && transaction.accountId === account.id).reduce((sum, transaction) => sum + transaction.amount, 0);
+      const goalTransfers = transactions.filter(transaction => transaction.type === 'goal-contribution' && transaction.toAccountId && transaction.accountId === account.id).reduce((sum, transaction) => sum + transaction.amount, 0);
+      const member = members.find(item => item.id === account.memberId);
+      return { id: account.id, name: member?.name || account.name, income, expenses, goalTransfers, balance: balances[account.id] || 0 };
+    });
+    return {
+      rows,
+      income: rows.reduce((sum, row) => sum + row.income, 0),
+      expenses: rows.reduce((sum, row) => sum + row.expenses, 0),
+      goalTransfers: rows.reduce((sum, row) => sum + row.goalTransfers, 0),
+      balance: rows.reduce((sum, row) => sum + row.balance, 0),
+      monthStart,
+      date,
+    };
+  }, [members, goals]);
+
   const addContribution = (event: FormEvent, goal: FamilyGoal) => {
     event.preventDefault();
     const amount = Number(contributionAmount);
@@ -148,11 +172,22 @@ export default function FamilyPage() {
       </section>
 
       <section className="family-summary" aria-label="Сводка семейного бюджета">
-        <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Регулярные поступления всех участников.</p></article>
+        <article className="card total-card income"><span>Плановые доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Регулярные доходы, заданные в настройках.</p></article>
         <article className="card total-card expenses"><span>Обязательные расходы</span><strong>{formatCurrency(plan.expenses)}</strong><p>Вычитаются до распределения на цели.</p></article>
         <article className="card total-card"><span>Свободно в месяц</span><strong>{formatCurrency(plan.available)}</strong><p>Доходы минус обязательные расходы.</p></article>
         <article className="card total-card"><span>Нужно для дедлайнов</span><strong>{formatCurrency(plan.required)}</strong><p>Запланировано {formatCurrency(plan.planned)}/мес.</p></article>
         <article className="card total-card"><span>Внесено в этом месяце</span><strong>{formatCurrency(plan.actualThisMonth)}</strong><p>Фактические пополнения фондов.</p></article>
+      </section>
+
+      <section className="card large">
+        <div className="card-head"><div><h2>Фактические денежные потоки семьи</h2><p className="settings-note">Завершённые операции с {familyCashFlow.monthStart} по {familyCashFlow.date}. Переводы в цели остаются вашими деньгами, но исключаются из доступных счетов.</p></div></div>
+        <div className="family-summary" aria-label="Фактические денежные потоки">
+          <article className="card total-card income"><span>Фактически поступило</span><strong>+{formatCurrency(familyCashFlow.income)}</strong></article>
+          <article className="card total-card expenses"><span>Фактические расходы</span><strong>−{formatCurrency(familyCashFlow.expenses)}</strong></article>
+          <article className="card total-card"><span>Переведено в фонды целей</span><strong>↔{formatCurrency(familyCashFlow.goalTransfers)}</strong></article>
+          <article className="card total-card"><span>Доступно на счетах семьи</span><strong>{formatCurrency(familyCashFlow.balance)}</strong></article>
+        </div>
+        <div className="settings-list">{familyCashFlow.rows.map(row => <div key={row.id} className="settings-row"><div><strong>{row.name}</strong><p>Поступило +{formatCurrency(row.income)} · расходы −{formatCurrency(row.expenses)} · в цели ↔{formatCurrency(row.goalTransfers)}</p></div><strong>На счёте {formatCurrency(row.balance)}</strong></div>)}</div>
       </section>
 
       {nextGoal && <section className={`family-alert ${nextGoal.planStatus}`}><strong>{nextGoal.title}</strong><span>{nextGoal.planStatus === 'at-risk' ? `Не хватает ${formatCurrency(Math.max(0, (nextGoal.requiredMonthly ?? 0) - nextGoal.plannedContribution))}/мес до дедлайна.` : nextGoal.planStatus === 'missing-date' ? 'Укажите дедлайн, чтобы проверить выполнимость.' : `Ближайшая цель: ${formatDeadline(nextGoal.targetDate)}.`}</span></section>}
