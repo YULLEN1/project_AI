@@ -65,7 +65,6 @@ export default function GoalsPage() {
   }, []);
 
   const data = useMemo(() => {
-    const budget = readNumber('moneypilot-budget') ?? 0;
     const income = readNumber('moneypilot-income');
     const accounts = getAccounts();
     const transactions = getTransactions();
@@ -81,9 +80,10 @@ export default function GoalsPage() {
     const consumerExpenses = monthPurchases.reduce((sum, p) => sum + p.amount, 0);
     const goalContributions = goalContributionTotal(transactions, monthDates[0], today);
     const totalSpent = consumerExpenses + goalContributions;
+    const actualIncome = transactions.filter(transaction => transaction.type === 'income' && transaction.status === 'completed' && transaction.date >= monthDates[0] && transaction.date <= today).reduce((sum, transaction) => sum + transaction.amount, 0);
     const avgDailySpend = daysPassed > 0 ? totalSpent / daysPassed : 0;
     const projectedMonthEnd = avgDailySpend * monthDates.length;
-    const currentMonthlySavings = Math.max(0, budget - projectedMonthEnd);
+    const currentMonthlySavings = Math.max(0, actualIncome - projectedMonthEnd);
 
     const cafeKeywords = ['кафе', 'кофе', 'кофейн', 'еда', 'ресторан', 'доставка', 'обед', 'ужин', 'завтрак'];
     const subscriptionKeywords = ['подписк', 'spotify', 'netflix', 'kinopoisk', 'yandex plus', 'apple', 'youtube premium'];
@@ -97,8 +97,8 @@ export default function GoalsPage() {
       .reduce((sum, p) => sum + p.amount, 0);
 
     return {
-      budget,
       income,
+      actualIncome,
       savings,
       totalSpent,
       currentMonthlySavings,
@@ -227,15 +227,15 @@ export default function GoalsPage() {
         </div>
         <div className="card reveal-card">
           <p className="eyebrow">Рекомендация</p>
-          {data.projectedMonthEnd > data.budget ? (
+          {data.projectedMonthEnd > data.actualIncome ? (
             <>
-              <h4>Расходы превышают бюджет</h4>
-              <p>Текущий темп ({formatCurrency(Math.round(data.projectedMonthEnd))}/мес) выше бюджета ({formatCurrency(data.budget)}/мес). Сократьте траты или увеличьте доход.</p>
+              <h4>Расходы выше фактических поступлений</h4>
+              <p>Текущий темп ({formatCurrency(Math.round(data.projectedMonthEnd))}/мес) выше фактически полученных поступлений ({formatCurrency(data.actualIncome)}). Сократите траты или дождитесь поступления.</p>
             </>
           ) : (
             <>
               <h4>Всё под контролем</h4>
-              <p>При текущем темпе к концу месяца останется {formatCurrency(Math.round(data.budget - data.projectedMonthEnd))}. Вы в хорошей форме.</p>
+              <p>При текущем темпе из фактически полученных денег останется {formatCurrency(Math.round(data.actualIncome - data.projectedMonthEnd))}. Вы в хорошей форме.</p>
             </>
           )}
         </div>

@@ -281,14 +281,8 @@ export default function SettingsPage() {
     event.preventDefault();
     setMessage('');
 
-    const hasBudgetError = budget === null || budget <= 0;
-    setBudgetError(hasBudgetError);
-
-    if (hasBudgetError) {
-      setMessage('Укажите месячный лимит расходов.');
-      return;
-    }
-    window.localStorage.setItem(storageKeys.budget, String(budget));
+    if (budget !== null && budget > 0) window.localStorage.setItem(storageKeys.budget, String(budget));
+    else window.localStorage.removeItem(storageKeys.budget);
     if (income !== null) window.localStorage.setItem(storageKeys.income, String(income));
     else window.localStorage.removeItem(storageKeys.income);
     if (userAge !== null) {
@@ -318,7 +312,7 @@ export default function SettingsPage() {
     setUserAge(null);
     setNotifications(true);
     setBudgetError(false);
-    setMessage('Настройки сброшены. Укажите месячный лимит расходов.');
+    setMessage('Настройки сброшены.');
   };
 
   const clearAllData = () => {
@@ -734,7 +728,7 @@ export default function SettingsPage() {
           <h4>Основные настройки</h4>
           <form className="settings-form" onSubmit={handleSubmit} noValidate>
             <label>
-              Месячный лимит расходов <span style={{ color: 'var(--color-error)' }}>*</span>
+              Ориентир месячных расходов
               <input
                 type="number"
                 value={budget ?? ''}
@@ -742,11 +736,11 @@ export default function SettingsPage() {
                   setBudget(e.target.value ? Number(e.target.value) : null);
                   setBudgetError(false);
                 }}
-                min={1}
+                min={0}
                 placeholder="Например, 80000 ₽"
                 className={budgetError ? 'input-error' : ''}
-                required
               />
+              <small className="settings-note">Используется только как ориентир в подсказках и не влияет на остатки, поступления или доступную сумму.</small>
             </label>
 
             <label>

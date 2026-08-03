@@ -361,8 +361,6 @@ export default function AnalyticsPage() {
     () => purchases.filter(item => rangeDates.includes(item.date)),
     [purchases, rangeDates],
   );
-  const configuredIncome = readNumber('moneypilot-income');
-
   const analytics = useMemo(() => {
     const categoryTotals = filteredPurchases.reduce<Record<string, number>>((acc, item) => {
       acc[item.category] = (acc[item.category] || 0) + item.amount;
@@ -530,9 +528,9 @@ export default function AnalyticsPage() {
           <p>Переводы в фонды целей: {formatCurrency(analytics?.cashFlow.goalContributions ?? 0)}.</p>
         </article>
         <article className="card total-card">
-          <span>Сценарий бюджета на месяц</span>
-          <strong>{configuredIncome === null ? 'Нет данных' : formatCurrency(configuredIncome - (analytics?.monthlyExpenses ?? 0))}</strong>
-          <p>{configuredIncome === null ? 'Укажите ориентир дохода для сценария.' : `Ориентир дохода минус средние расходы ${formatCurrency(analytics?.monthlyExpenses ?? 0)}/мес. Это не факт.`}</p>
+          <span>Чистый поток за период</span>
+          <strong>{analytics ? formatCurrency(analytics.cashFlow.netCashFlow) : formatCurrency(0)}</strong>
+          <p>Только фактически полученные поступления минус завершённые расходы.</p>
         </article>
       </section>
 

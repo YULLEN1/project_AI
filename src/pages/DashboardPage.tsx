@@ -21,13 +21,6 @@ type IncomeEvent = {
   recurrence: 'once' | 'monthly';
 };
 
-function getBaseBudget() {
-  if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem('moneypilot-budget');
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
 function readIncomeEvents() {
   if (typeof window === 'undefined') return [] as IncomeEvent[];
   const raw = window.localStorage.getItem('moneypilot-income-events');
@@ -127,19 +120,6 @@ function daysBetween(fromDate: string, toDate: string) {
   return Math.max(0, Math.round((new Date(`${toDate}T00:00:00`).getTime() - new Date(`${fromDate}T00:00:00`).getTime()) / 86400000));
 }
 
-function getPlannedIncomeForMonth(events: IncomeEvent[], selectedDate: string, includeLikely: boolean) {
-  const monthKey = selectedDate.slice(0, 7);
-  return events.reduce((sum, event) => {
-    if (event.status === 'received') return event.date.startsWith(monthKey) ? sum + event.amount : sum;
-    if (!includeLikely && event.confidence === 'likely') return sum;
-    if (event.recurrence === 'once') return event.date.startsWith(monthKey) ? sum + event.amount : sum;
-    const original = new Date(`${event.date}T00:00:00`);
-    const selected = new Date(`${selectedDate}T00:00:00`);
-    const occurrence = new Date(selected.getFullYear(), selected.getMonth(), Math.min(original.getDate(), new Date(selected.getFullYear(), selected.getMonth() + 1, 0).getDate()));
-    return occurrence ? sum + event.amount : sum;
-  }, 0);
-}
-
 function getSavedSuggestion() {
   if (typeof window === 'undefined') return { name: '', price: 0 };
   const raw = window.localStorage.getItem('moneypilot-suggestedItem');
@@ -205,7 +185,6 @@ export default function DashboardPage() {
   }, [range, selectedDate]);
 
 
-  const baseBudget = getBaseBudget();
   const accounts = getAccounts();
   const plannedPayments = getPlannedPayments();
   const purchases = useMemo<Purchase[]>(() => transactions
@@ -223,7 +202,6 @@ export default function DashboardPage() {
   const monthKey = selectedDate.slice(0, 7);
   const monthSpent = useMemo(() => calculateTotalSpent(transactions, `${monthKey}-01`, selectedDate), [transactions, monthKey, selectedDate]);
   const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate]);
-  const plannedIncomeForMonth = useMemo(() => getPlannedIncomeForMonth(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
   const familyGoals = readJson<Array<{ target: number; currentSavings?: number; monthlyContribution?: number; isPaused?: boolean }>>('moneypilot-family-goals', []);
   const savingsGoals = readJson<Array<{ targetAmount: number; currentSavings: number; targetDate?: string; targetAge?: number; type?: string; name?: string; monthlyPension?: number; retirementAge?: number; lifeExpectancy?: number }>>('moneypilot-savings-goals', []);
   const userAge = (() => { const value = Number(window.localStorage.getItem('moneypilot-user-age')); return Number.isFinite(value) && value > 0 ? value : null; })();
@@ -233,17 +211,16 @@ export default function DashboardPage() {
   ], userAge);
   const goalContributionsToDate = goalContributionTotal(transactions, `${monthKey}-01`, selectedDate);
   const goalsReserved = Math.max(0, plannedGoalsForMonth - goalContributionsToDate);
-  const remainingBudget = baseBudget !== null ? baseBudget - monthSpent - goalContributionsToDate : 0;
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
   const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const paymentsReserved = plannedPaymentsReserved(plannedPayments, transactions, selectedDate);
-  const spendableBeforeIncome = Math.min(remainingBudget, availableCash - paymentsReserved - goalsReserved);
-  const dailyBudget = baseBudget !== null && daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
+  const spendableBeforeIncome = availableCash - paymentsReserved - goalsReserved;
+  const dailyBudget = daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);
-  const plannedMonthBalance = Math.min(remainingBudget, availableCash + Math.max(0, plannedIncomeForMonth - actualIncomeToDate) - paymentsReserved - goalsReserved);
+  const plannedMonthBalance = spendableBeforeIncome;
   const plannedDailyBudget = plannedMonthBalance / daysLeftInMonth;
-  const healthScore = baseBudget !== null && filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
+  const healthScore = filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
   const lastPurchase = purchases[purchases.length - 1];
   const averagePurchase = filteredPurchases.length ? Math.round(totalSpent / filteredPurchases.length) : 0;
@@ -298,28 +275,27 @@ export default function DashboardPage() {
       <section className="hero-panel dashboard-decision">
         <div className="hero-copy">
           <p className="eyebrow">Финансовый ориентир</p>
-          <h2>{baseBudget !== null && nextIncome ? 'Можно потратить сегодня' : 'Добавьте ближайшее поступление'}</h2>
-          {baseBudget !== null && nextIncome ? (
+          <h2>{nextIncome ? 'Можно потратить сегодня' : 'Добавьте ближайшее поступление'}</h2>
+          {nextIncome ? (
             <>
               <strong className="decision-amount">{formatCurrency(Math.round(dailyBudget))}</strong>
               <p>На доступных счетах: {formatCurrency(availableCash)}. Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · через {daysToIncome} дн.</p>
             </>
           ) : (
-            <p>Укажите месячный лимит и добавьте подтверждённое поступление в настройках, чтобы получить безопасный дневной ориентир.</p>
+            <p>Добавьте ожидаемую дату следующего поступления, чтобы распределить только уже полученные деньги по дням.</p>
           )}
         </div>
-        <Link className="hero-action" to="/settings">{baseBudget === null || !nextIncome ? 'Добавить поступление' : 'Изменить план'}</Link>
+        <Link className="hero-action" to="/settings">{nextIncome ? 'Изменить план' : 'Добавить поступление'}</Link>
       </section>
-      {baseBudget !== null && <section className="card calculation-breakdown" aria-label="Расчёт доступных денег">
+      <section className="card calculation-breakdown" aria-label="Расчёт доступных денег">
         <div className="card-head"><div><h2>Как рассчитано «можно потратить»</h2><p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p></div></div>
         <div className="settings-list">
           <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
           <div className="settings-row"><span>Резерв обязательных платежей месяца</span><strong>−{formatCurrency(paymentsReserved)}</strong></div>
           <div className="settings-row"><span>Резерв личных и семейных целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
-          <div className="settings-row"><span>Остаток месячного лимита после расходов и целей</span><strong>{formatCurrency(remainingBudget)}</strong></div>
           <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
         </div>
-      </section>}
+      </section>
       {incomeEvents.some(event => event.status === 'expected' && event.confidence === 'likely') && <label className="income-confidence-toggle"><input type="checkbox" checked={includeLikelyIncome} onChange={e => setIncludeLikelyIncome(e.target.checked)} /> Учитывать вероятные поступления в ориентире</label>}
 
       <section className="widget-tabs" aria-label="Временные показатели">
@@ -366,8 +342,8 @@ export default function DashboardPage() {
         </article>
         <article className="metric-card">
           <span>Дневной ориентир</span>
-          <strong>{baseBudget !== null && nextIncome ? formatCurrency(Math.round(dailyBudget)) : 'Настройте данные'}</strong>
-          {baseBudget !== null && filteredPurchases.length > 0 ? (
+          <strong>{nextIncome ? formatCurrency(Math.round(dailyBudget)) : 'Укажите дату дохода'}</strong>
+          {nextIncome && filteredPurchases.length > 0 ? (
             <div className="mini-pill">
               {(() => {
                 const avgPerDay = totalSpent / Math.max(1, rangeDates.filter(d => d <= getToday()).length);
@@ -392,8 +368,8 @@ export default function DashboardPage() {
         </article>
         <article className="metric-card">
           <span>Доступно до дохода</span>
-          <strong>{baseBudget !== null && nextIncome ? formatCurrency(spendableBeforeIncome) : 'Настройте данные'}</strong>
-          {baseBudget !== null && nextIncome ? (
+          <strong>{formatCurrency(spendableBeforeIncome)}</strong>
+          {nextIncome ? (
             <div className={`mini-pill ${spendableBeforeIncome > 0 ? 'good' : 'warning'}`}>
                {spendableBeforeIncome < 0 ? `Дефицит ${formatCurrency(Math.abs(spendableBeforeIncome))}` : `${formatCurrency(spendableBeforeIncome)} до следующего дохода`}
             </div>
@@ -435,7 +411,7 @@ export default function DashboardPage() {
               <tbody>{chartPoints.map(point => <tr key={point.date}><th scope="row">{formatDateLabel(point.date)}</th><td>{formatCurrency(point.total)}</td></tr>)}</tbody>
             </table>
             <div className="chart-tooltip">
-              {baseBudget !== null && nextIncome
+              {nextIncome
                 ? (filteredPurchases.length
                   ? `Итого ${formatCurrency(totalSpent)} за выбранный период`
                   : 'Добавьте расходы в выбранный диапазон')
@@ -452,7 +428,7 @@ export default function DashboardPage() {
               : 'Добавьте первую покупку.'}
           </p>
           <p>
-            {baseBudget !== null && nextIncome
+            {nextIncome
               ? <>До следующего поступления безопасно использовать не больше <strong>{formatCurrency(spendableBeforeIncome)}</strong> из уже полученных денег.</>
               : 'Установите лимит и добавьте поступление в настройках.'}
           </p>
@@ -494,7 +470,7 @@ export default function DashboardPage() {
             {suggestion.name && suggestion.price > 0 ? (
               <>
                 <h4>{suggestion.name} · {formatCurrency(suggestion.price)}</h4>
-                <p>После такой покупки свободных денег останется {formatCurrency(Math.max(0, remainingBudget - suggestion.price))}.</p>
+                <p>После такой покупки свободных денег останется {formatCurrency(Math.max(0, spendableBeforeIncome - suggestion.price))}.</p>
                 <p className="settings-note">Измените это предложение в <Link to="/settings">Настройках</Link>.</p>
               </>
             ) : (
