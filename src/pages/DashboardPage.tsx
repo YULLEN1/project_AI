@@ -116,6 +116,16 @@ function getNextIncome(events: IncomeEvent[], fromDate: string, includeLikely: b
   }).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
 }
 
+function expectedIncomeThroughMonthEnd(events: IncomeEvent[], fromDate: string, includeLikely: boolean) {
+  const { end: monthEnd, lastDay } = monthDates(fromDate);
+  return events.reduce((sum, event) => {
+    if (event.status !== 'expected' || (!includeLikely && event.confidence === 'likely')) return sum;
+    if (event.recurrence === 'once') return event.date >= fromDate && event.date <= monthEnd ? sum + event.amount : sum;
+    const dueDate = `${fromDate.slice(0, 7)}-${String(Math.min(new Date(`${event.date}T00:00:00`).getDate(), lastDay)).padStart(2, '0')}`;
+    return dueDate >= fromDate ? sum + event.amount : sum;
+  }, 0);
+}
+
 function daysBetween(fromDate: string, toDate: string) {
   return Math.max(0, Math.round((new Date(`${toDate}T00:00:00`).getTime() - new Date(`${fromDate}T00:00:00`).getTime()) / 86400000));
 }
@@ -214,11 +224,13 @@ export default function DashboardPage() {
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
   const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
-  const paymentsReserved = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
-  const spendableBeforeIncome = availableCash - paymentsReserved - goalsReserved;
+  const paymentsBeforeIncome = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
+  const paymentsThroughMonthEnd = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, monthDates(selectedDate).end);
+  const plannedIncomeThroughMonthEnd = expectedIncomeThroughMonthEnd(incomeEvents, selectedDate, includeLikelyIncome);
+  const spendableBeforeIncome = availableCash - paymentsBeforeIncome - goalsReserved;
   const dailyBudget = daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);
-  const plannedMonthBalance = spendableBeforeIncome;
+  const plannedMonthBalance = availableCash + plannedIncomeThroughMonthEnd - paymentsThroughMonthEnd - goalsReserved;
   const plannedDailyBudget = plannedMonthBalance / daysLeftInMonth;
   const healthScore = filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
   const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
@@ -291,7 +303,7 @@ export default function DashboardPage() {
         <div className="card-head"><div><h2>Как рассчитано «можно потратить»</h2><p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p></div></div>
         <div className="settings-list">
           <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
-          <div className="settings-row"><span>Резерв обязательных платежей месяца</span><strong>−{formatCurrency(paymentsReserved)}</strong></div>
+          <div className="settings-row"><span>Резерв обязательных платежей до дохода</span><strong>−{formatCurrency(paymentsBeforeIncome)}</strong></div>
           <div className="settings-row"><span>Резерв личных и семейных целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
           <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
         </div>
@@ -380,7 +392,7 @@ export default function DashboardPage() {
         <article className="metric-card">
           <span>По плану до конца месяца</span>
           <strong>{formatCurrency(plannedMonthBalance)}</strong>
-          <div className="mini-pill good">{formatCurrency(Math.round(plannedDailyBudget))}/день по графику поступлений</div>
+          <div className="mini-pill good">{formatCurrency(Math.round(plannedDailyBudget))}/день с плановыми поступлениями</div>
         </article>
         <article className="metric-card">
           <span>Накопления</span>
