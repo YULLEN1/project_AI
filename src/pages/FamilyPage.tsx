@@ -64,6 +64,7 @@ export default function FamilyPage() {
   const [contributionAmount, setContributionAmount] = useState('');
   const [contributionMemberId, setContributionMemberId] = useState('');
   const [contributionDate, setContributionDate] = useState(getToday());
+  const [showFamilyDetails, setShowFamilyDetails] = useState(false);
 
   useEffect(() => {
     const refresh = () => { setMembers(readJson('moneypilot-family-members', [])); setFamilyExpenses(readJson('moneypilot-family-expenses', [])); setGoals(readJson('moneypilot-family-goals', [])); };
@@ -167,7 +168,15 @@ export default function FamilyPage() {
         ))}</div> : <div className="empty-cell">Добавьте семейную цель с накопленной суммой и дедлайном в <Link to="/settings">Настройках</Link>.</div>}
       </section>
 
-      <details className="card family-details"><summary>Последние пополнения и участники</summary><div className="content-grid"><div><h3>Последние пополнения</h3>{activities.length ? <ul className="family-activity">{activities.map(item => <li key={item.id}><span>{formatDate(item.date)} · {item.goalTitle}{item.memberName ? ` · ${item.memberName}` : ''}</span><strong>+{formatCurrency(item.amount)}</strong></li>)}</ul> : <p className="settings-note">Пополнений пока нет.</p>}</div><div><h3>Участники</h3><div className="settings-list">{members.length ? members.map(member => <div key={member.id} className="settings-row"><strong>{member.name}</strong><span>{formatCurrency(member.contribute)}/мес</span></div>) : <p className="settings-note">Добавьте участников в настройках.</p>}</div></div></div></details>
+      <section className="card family-details">
+        <button className="family-details-toggle" type="button" onClick={() => setShowFamilyDetails(!showFamilyDetails)} aria-expanded={showFamilyDetails}>
+          Последние пополнения и участники
+        </button>
+        {showFamilyDetails && <div className="content-grid">
+          <div><h2>Последние пополнения</h2>{activities.length ? <ul className="family-activity">{activities.map(item => <li key={item.id}><span>{formatDate(item.date)} · {item.goalTitle}{item.memberName ? ` · ${item.memberName}` : ''}</span><strong>+{formatCurrency(item.amount)}</strong></li>)}</ul> : <p className="settings-note">Пополнений пока нет.</p>}</div>
+          <div><h2>Участники</h2><div className="settings-list">{members.length ? members.map(member => <div key={member.id} className="settings-row"><strong>{member.name}</strong><span>{formatCurrency(member.contribute)}/мес</span></div>) : <p className="settings-note">Добавьте участников в настройках.</p>}</div></div>
+        </div>}
+      </section>
     </div>
   );
 }
