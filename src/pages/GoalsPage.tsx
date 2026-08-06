@@ -178,7 +178,8 @@ export default function GoalsPage() {
 
   const forecast = useMemo(() => {
     const monthlyIncome = data.income ?? data.actualIncome;
-    const targetMonthly = Math.round(monthlyIncome * (savingsRate / 100));
+    const scenarioIncome = monthlyIncome + (selected.key === 'income' ? selected.monthlyDelta : 0);
+    const targetMonthly = Math.round(scenarioIncome * (savingsRate / 100));
     const expectedIncomeNotReceived = Math.max(0, monthlyIncome - data.actualIncome);
     const availableMonthly = Math.max(0, data.currentMonthlySavings + expectedIncomeNotReceived + selected.monthlyDelta);
     const monthly = Math.min(targetMonthly, availableMonthly);
