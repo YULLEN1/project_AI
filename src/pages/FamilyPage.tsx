@@ -56,6 +56,11 @@ function getShares(goal: FamilyGoal, members: FamilyMember[], contribution: numb
   return participants.map((member, index) => ({ id: member.id, name: member.name, amount: base + (index === 0 ? contribution - base * participants.length : 0) }));
 }
 
+function preferredContributorId(goal: { participantContributions: Array<{ id: string; amount: number; actual: number }> }) {
+  return [...goal.participantContributions]
+    .sort((a, b) => (b.amount - b.actual) - (a.amount - a.actual))[0]?.id ?? '';
+}
+
 export default function FamilyPage() {
   const [members, setMembers] = useState<FamilyMember[]>(() => readJson('moneypilot-family-members', []));
   const [familyExpenses, setFamilyExpenses] = useState<FamilyExpense[]>(() => readJson('moneypilot-family-expenses', []));
@@ -153,7 +158,7 @@ export default function FamilyPage() {
         <article className="card total-card"><span>Можно направить на цели</span><strong>{formatCurrency(plan.available)}</strong><p>После обязательных расходов.</p></article>
       </section>
 
-      {nextGoal && <section className={`family-alert ${nextGoal.planStatus}`}><div><strong>Что сделать сейчас: {nextGoal.title}</strong><span>{nextGoal.planStatus === 'at-risk' ? `Не хватает ${formatCurrency(Math.max(0, (nextGoal.requiredMonthly ?? 0) - nextGoal.plannedContribution))}/мес до срока.` : nextGoal.planStatus === 'missing-date' ? 'Укажите срок, чтобы проверить план.' : `Пополните на ${formatCurrency(Math.max(0, nextGoal.plannedContribution - nextGoal.actualThisMonth))} в этом месяце.`}</span></div><button type="button" className="text-link" onClick={() => { setContributionGoalId(nextGoal.id); setContributionMemberId(nextGoal.memberIds?.[0] ?? ''); }}>Пополнить</button></section>}
+      {nextGoal && <section className={`family-alert ${nextGoal.planStatus}`}><div><strong>Что сделать сейчас: {nextGoal.title}</strong><span>{nextGoal.planStatus === 'at-risk' ? `Не хватает ${formatCurrency(Math.max(0, (nextGoal.requiredMonthly ?? 0) - nextGoal.plannedContribution))}/мес до срока.` : nextGoal.planStatus === 'missing-date' ? 'Укажите срок, чтобы проверить план.' : `Пополните на ${formatCurrency(Math.max(0, nextGoal.plannedContribution - nextGoal.actualThisMonth))} в этом месяце.`}</span></div><button type="button" className="text-link" onClick={() => { setContributionGoalId(nextGoal.id); setContributionMemberId(preferredContributorId(nextGoal)); }}>Пополнить</button></section>}
 
       <section className="card large">
         <div className="card-head"><div><h2>Семейные цели</h2><p className="settings-note">Сначала показаны цели с риском срыва срока.</p></div><Link className="text-link" to="/settings">Добавить цель</Link></div>
@@ -162,7 +167,8 @@ export default function FamilyPage() {
             <div className="goal-plan-head"><div><h3>{goal.title}</h3><span className="settings-note">{formatDeadline(goal.targetDate)}</span></div><strong>{formatCurrency(goal.plannedContribution)}/мес</strong></div>
             <div className="goal-progress-label"><span>Накоплено</span><strong>{goal.progress}%</strong></div><div className="bar-track"><span style={{ width: `${goal.progress}%` }} /></div><div className="goal-progress-numbers"><span>{formatCurrency(goal.currentSavings)}</span><span>из {formatCurrency(goal.target)}</span></div>
             <div className={`family-goal-status ${goal.planStatus}`}>{goal.planStatus === 'done' ? 'Цель достигнута' : goal.planStatus === 'paused' ? 'План на паузе' : goal.planStatus === 'missing-date' ? 'Добавьте срок' : goal.actualThisMonth >= goal.plannedContribution ? 'Взнос за месяц выполнен' : `Осталось внести ${formatCurrency(goal.plannedContribution - goal.actualThisMonth)}`}</div>
-            <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(goal.memberIds?.[0] ?? ''); }}>Пополнить</button><Link className="text-link" to="/settings">Подробнее</Link></div>
+            {goal.participantContributions.length > 0 && <details className="goal-share-details"><summary>Взнос участников</summary><div className="goal-share-list">{goal.participantContributions.map(share => <div key={share.id}><span>{share.name}</span><strong>{formatCurrency(Math.max(0, share.amount - share.actual))} из {formatCurrency(share.amount)}</strong></div>)}</div></details>}
+            <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(preferredContributorId(goal)); }}>Пополнить</button><Link className="text-link" to="/settings">Подробнее</Link></div>
             {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><button type="submit">Сохранить</button><details className="goal-form-details"><summary>Кто и когда внёс</summary><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /></details></form>}
           </article>
         ))}</div> : <div className="empty-cell">Добавьте семейную цель с накопленной суммой и дедлайном в <Link to="/settings">Настройках</Link>.</div>}

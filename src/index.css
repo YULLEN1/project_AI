@@ -1100,6 +1100,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .family-goal-fact { padding: 8px 10px; border-radius: var(--radius-sm); font-size: var(--font-size-sm); }
 .family-goal-fact.funded { color: #9af7d0; background: rgba(92, 205, 102, 0.08); }
 .family-goal-fact.missing { color: #ffca7a; background: rgba(255, 202, 122, 0.08); }
+.goal-share-details { font-size: var(--font-size-sm); }
+.goal-share-details summary { cursor: pointer; color: #b8cfe8; }
+.goal-share-list { display: grid; gap: 6px; margin-top: 8px; }
+.goal-share-list div { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.goal-share-list div:last-child { border-bottom: 0; }
+.theme-light .goal-share-details summary { color: #2a3d5e; }
 .family-alert { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border-radius: var(--radius-md); background: rgba(55, 199, 255, 0.1); color: #c9efff; }
 .family-alert > div { display: grid; gap: 4px; }
 .family-alert > div span { display: block; }
