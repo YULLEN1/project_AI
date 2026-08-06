@@ -1107,10 +1107,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .family-alert.missing-date { color: #b8d5ff; }
 .goal-card-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .goal-card-actions button { padding: 0; border: 0; background: none; }
-.goal-contribution-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 4px; }
+.goal-contribution-form { display: grid; grid-template-columns: 1fr; gap: 8px; padding-top: 4px; }
 .goal-contribution-form input, .goal-contribution-form select { min-width: 0; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: inherit; padding: 9px 10px; border-radius: var(--radius-sm); }
-.goal-contribution-form button { grid-column: 1 / -1; padding: 9px 12px; }
-.goal-form-details { grid-column: 1 / -1; font-size: var(--font-size-sm); color: #b8cfe8; }
+.goal-contribution-form button { padding: 9px 12px; }
+.goal-form-details { font-size: var(--font-size-sm); color: #b8cfe8; }
 .goal-form-details summary { cursor: pointer; margin: 4px 0 8px; }
 .goal-form-details select, .goal-form-details input { width: 100%; margin-top: 8px; }
 .family-details-toggle { width: 100%; border: 0; padding: 0; background: none; color: inherit; font-weight: 700; text-align: left; box-shadow: none; }
