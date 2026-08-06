@@ -569,9 +569,14 @@ export default function SettingsPage() {
     const goalId = `family-${id}`;
     const accountId = goalAccountId(goalId);
     const sourceAccountId = familyGoalFundingMemberId ? memberAccountId(familyGoalFundingMemberId) : 'main';
-    const sourceAccountName = accounts.find(account => account.id === sourceAccountId)?.name || 'основного счёта';
-    const balanceAfterContribution = (accountBalances(accounts, transactions, familyGoalFundingDate)[sourceAccountId] || 0) - amount;
-    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс ${sourceAccountName} станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
+    const currentMonth = getToday().slice(0, 7);
+    const monthlyIncome = members.reduce((sum, member) => sum + member.contribute, 0);
+    const monthlyExpenses = familyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const contributedThisMonth = familyGoalsList.reduce((sum, familyGoal) => sum + (familyGoal.activity ?? [])
+      .filter(activity => activity.date.startsWith(currentMonth))
+      .reduce((activitySum, activity) => activitySum + activity.amount, 0), 0);
+    const remainingBudget = monthlyIncome - monthlyExpenses - contributedThisMonth;
+    if (amount > remainingBudget && !window.confirm(`После пополнения на цели останется −${formatCurrency(Math.abs(remainingBudget - amount))} от семейного бюджета этого месяца. Сохранить операцию?`)) return;
     const transactionId = `family-goal-${id}-${Date.now()}`;
     const date = familyGoalFundingDate;
     handleSaveFamilyGoals(familyGoalsList.map(goal => goal.id === id ? { ...goal, currentSavings: (goal.currentSavings ?? 0) + amount, activity: [...(goal.activity ?? []), { id: transactionId, amount, date, memberId: familyGoalFundingMemberId || undefined }] } : goal));
