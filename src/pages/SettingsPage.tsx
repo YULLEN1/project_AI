@@ -493,10 +493,17 @@ export default function SettingsPage() {
     const deadline = new Date(`${familyGoalDate}-01T00:00:00`);
     const now = new Date();
     const months = Math.max(1, (deadline.getFullYear() - now.getFullYear()) * 12 + deadline.getMonth() - now.getMonth() + 1);
-    const contribution = Number.isFinite(parsedContribution) && parsedContribution > 0
-      ? parsedContribution
-      : Math.ceil(Math.max(0, parsed - savings) / months);
-    if (familyGoalDistribution === 'custom' && participants.length > 0 && customContributionTotal !== contribution) {
+    const hasManualContribution = familyGoalDistribution === 'custom' && customContributionTotal > 0;
+    const contribution = hasManualContribution
+      ? customContributionTotal
+      : Number.isFinite(parsedContribution) && parsedContribution > 0
+        ? parsedContribution
+        : Math.ceil(Math.max(0, parsed - savings) / months);
+    if (familyGoalDistribution === 'custom' && participants.length > 0 && customContributionTotal <= 0) {
+      setMessage('Для ручного распределения укажите взнос хотя бы одного участника.');
+      return;
+    }
+    if (familyGoalDistribution === 'custom' && Number.isFinite(parsedContribution) && parsedContribution > 0 && customContributionTotal !== parsedContribution) {
       setMessage('Сумма индивидуальных взносов должна совпадать с общим взносом на цель.');
       return;
     }
