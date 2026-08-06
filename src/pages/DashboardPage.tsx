@@ -116,16 +116,6 @@ function getNextIncome(events: IncomeEvent[], fromDate: string, includeLikely: b
   }).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
 }
 
-function expectedIncomeThroughMonthEnd(events: IncomeEvent[], fromDate: string, includeLikely: boolean) {
-  const { end: monthEnd, lastDay } = monthDates(fromDate);
-  return events.reduce((sum, event) => {
-    if (event.status !== 'expected' || (!includeLikely && event.confidence === 'likely')) return sum;
-    if (event.recurrence === 'once') return event.date >= fromDate && event.date <= monthEnd ? sum + event.amount : sum;
-    const dueDate = `${fromDate.slice(0, 7)}-${String(Math.min(new Date(`${event.date}T00:00:00`).getDate(), lastDay)).padStart(2, '0')}`;
-    return dueDate >= fromDate ? sum + event.amount : sum;
-  }, 0);
-}
-
 function daysBetween(fromDate: string, toDate: string) {
   return Math.max(0, Math.round((new Date(`${toDate}T00:00:00`).getTime() - new Date(`${fromDate}T00:00:00`).getTime()) / 86400000));
 }
@@ -182,6 +172,7 @@ export default function DashboardPage() {
   const [date, setDate] = useState(getToday());
   const [accountId, setAccountId] = useState('main');
   const [paymentId, setPaymentId] = useState('');
+  const [showDetails, setShowDetails] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
@@ -225,15 +216,8 @@ export default function DashboardPage() {
   const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const paymentsBeforeIncome = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
-  const paymentsThroughMonthEnd = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, monthDates(selectedDate).end);
-  const plannedIncomeThroughMonthEnd = expectedIncomeThroughMonthEnd(incomeEvents, selectedDate, includeLikelyIncome);
   const spendableBeforeIncome = availableCash - paymentsBeforeIncome - goalsReserved;
   const dailyBudget = daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
-  const daysLeftInMonth = Math.max(1, new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0).getDate() - Number(selectedDate.slice(8, 10)) + 1);
-  const plannedMonthBalance = availableCash + plannedIncomeThroughMonthEnd - paymentsThroughMonthEnd - goalsReserved;
-  const plannedDailyBudget = plannedMonthBalance / daysLeftInMonth;
-  const healthScore = filteredPurchases.length > 0 ? Math.max(45, Math.min(98, 92 - Math.round(totalSpent / 1800))) : 92;
-  const healthTone = healthScore >= 80 ? 'Отлично' : healthScore >= 65 ? 'Внимание' : 'Критично';
   const lastPurchase = purchases[purchases.length - 1];
   const averagePurchase = filteredPurchases.length ? Math.round(totalSpent / filteredPurchases.length) : 0;
   const chartPoints = useMemo(() => buildChartPoints(rangeDates, purchases), [rangeDates, purchases]);
@@ -299,15 +283,16 @@ export default function DashboardPage() {
         </div>
         <Link className="hero-action" to="/settings">{nextIncome ? 'Изменить план' : 'Добавить поступление'}</Link>
       </section>
-      <section className="card calculation-breakdown" aria-label="Расчёт доступных денег">
-        <div className="card-head"><div><h2>Как рассчитано «можно потратить»</h2><p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p></div></div>
+      <details className="card calculation-breakdown">
+        <summary>Как рассчитан ориентир</summary>
+        <p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p>
         <div className="settings-list">
           <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
           <div className="settings-row"><span>Резерв обязательных платежей до дохода</span><strong>−{formatCurrency(paymentsBeforeIncome)}</strong></div>
-          <div className="settings-row"><span>Резерв личных и семейных целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
+          <div className="settings-row"><span>Резерв целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
           <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
         </div>
-      </section>
+      </details>
       {incomeEvents.some(event => event.status === 'expected' && event.confidence === 'likely') && <label className="income-confidence-toggle"><input type="checkbox" checked={includeLikelyIncome} onChange={e => setIncludeLikelyIncome(e.target.checked)} /> Учитывать вероятные поступления в ориентире</label>}
 
       <section className="widget-tabs" aria-label="Временные показатели">
@@ -327,46 +312,9 @@ export default function DashboardPage() {
           <label htmlFor="analytics-date">Дата анализа</label>
           <input id="analytics-date" type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
         </div>
-        <div className="calendar-range">
-          {rangeDates.map(day => (
-            <button
-              key={day}
-              type="button"
-              className={`calendar-day ${day === selectedDate ? 'active' : ''}`}
-              onClick={() => setSelectedDate(day)}
-            >
-              <span>{formatDateLabel(day)}</span>
-              <small>{day === getToday() ? 'Сегодня' : ''}</small>
-            </button>
-          ))}
-        </div>
       </section>
 
       <section className="metrics-grid">
-        <article className="metric-card primary">
-          <span>До следующего дохода</span>
-          <strong>{nextIncome ? (daysToIncome === 0 ? 'Сегодня' : `${daysToIncome} дней`) : 'Нет поступлений'}</strong>
-          <div className="spark-line">
-            <span style={{ width: '70%' }} />
-            <span style={{ width: '45%' }} />
-            <span style={{ width: '90%' }} />
-          </div>
-        </article>
-        <article className="metric-card">
-          <span>Дневной ориентир</span>
-          <strong>{nextIncome ? formatCurrency(Math.round(dailyBudget)) : 'Укажите дату дохода'}</strong>
-          {nextIncome && filteredPurchases.length > 0 ? (
-            <div className="mini-pill">
-              {(() => {
-                const avgPerDay = totalSpent / Math.max(1, rangeDates.filter(d => d <= getToday()).length);
-                const diff = Math.round(((dailyBudget - avgPerDay) / Math.max(1, avgPerDay)) * 100);
-                return diff >= 0 ? `+${diff}% к среднему` : `${diff}% к среднему`;
-              })()}
-            </div>
-          ) : (
-            <div className="mini-pill">По фактически полученным деньгам</div>
-          )}
-        </article>
         <article className="metric-card">
           <span>Потрачено в этом месяце</span>
           <strong>{formatCurrency(monthSpent)}</strong>
@@ -378,7 +326,7 @@ export default function DashboardPage() {
             <div className="mini-pill">Нет полученных поступлений</div>
           )}
         </article>
-        <article className="metric-card">
+        <article className="metric-card primary">
           <span>Доступно до дохода</span>
           <strong>{formatCurrency(spendableBeforeIncome)}</strong>
           {nextIncome ? (
@@ -388,11 +336,6 @@ export default function DashboardPage() {
           ) : (
             <div className="mini-pill">Через настройки</div>
           )}
-        </article>
-        <article className="metric-card">
-          <span>По плану до конца месяца</span>
-          <strong>{formatCurrency(plannedMonthBalance)}</strong>
-          <div className="mini-pill good">{formatCurrency(Math.round(plannedDailyBudget))}/день с плановыми поступлениями</div>
         </article>
         <article className="metric-card">
           <span>Накопления</span>
@@ -439,37 +382,25 @@ export default function DashboardPage() {
               ? `${lastPurchase.title} — покупка №${filteredPurchases.length} за период. Средний чек — ${formatCurrency(averagePurchase)}.`
               : 'Добавьте первую покупку.'}
           </p>
-          <p>
-            {nextIncome
-              ? <>До следующего поступления безопасно использовать не больше <strong>{formatCurrency(spendableBeforeIncome)}</strong> из уже полученных денег.</>
-              : 'Установите лимит и добавьте поступление в настройках.'}
-          </p>
           <form className="inline-form purchase-form" onSubmit={handleSubmit} noValidate>
             <label><span className="sr-only">Название покупки</span><input aria-invalid={Boolean(formError)} value={title} onChange={e => { setTitle(e.target.value); setCategory(detectCategory(e.target.value)); }} placeholder="Что купили?" /></label>
             <label><span className="sr-only">Сумма в рублях</span><input aria-invalid={Boolean(formError)} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма, ₽" type="number" min="1" inputMode="decimal" /></label>
-             <label><span className="sr-only">Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-             </select></label>
-             <label><span className="sr-only">Счёт списания</span><select value={accountId} onChange={e => setAccountId(e.target.value)}>{accounts.filter(account => account.spendable).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-             <label><span className="sr-only">Обязательный платёж</span><select value={paymentId} onChange={e => setPaymentId(e.target.value)}><option value="">Не обязательный платёж</option>{plannedPayments.filter(payment => payment.active).map(payment => <option key={payment.id} value={payment.id}>{payment.title}</option>)}</select></label>
-             <label><span className="sr-only">Дата расхода</span><input aria-label="Дата расхода" type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
-            <button type="submit">Добавить</button>
+            <button type="submit">Добавить расход</button>
+            <button className="text-button" type="button" onClick={() => setShowDetails(!showDetails)} aria-expanded={showDetails}>Дополнительно</button>
+            {showDetails && <div className="purchase-details">
+              <label><span>Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
+               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select></label>
+              <label><span>Счёт</span><select value={accountId} onChange={e => setAccountId(e.target.value)}>{accounts.filter(account => account.spendable).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+              <label><span>Обязательный платёж</span><select value={paymentId} onChange={e => setPaymentId(e.target.value)}><option value="">Не выбран</option>{plannedPayments.filter(payment => payment.active).map(payment => <option key={payment.id} value={payment.id}>{payment.title}</option>)}</select></label>
+              <label><span>Дата</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+            </div>}
           </form>
           {formError && <p className="form-feedback error" role="alert">{formError}</p>}
           {formSuccess && <p className="form-feedback success" role="status">{formSuccess}</p>}
         </div>
 
         <div className="stack">
-          <div className="card">
-            <p className="eyebrow">Финансовое здоровье</p>
-            <h4>{healthTone} — {healthScore}/100</h4>
-            <ul>
-              <li>Расходы под контролем</li>
-              <li>Накопления растут</li>
-              <li>Осталось до конца месяца меньше, чем обычно</li>
-            </ul>
-          </div>
-
           <div className="card">
             <p className="eyebrow">Накопления</p>
             <h4>{formatCurrency(savings)}</h4>

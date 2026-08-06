@@ -336,6 +336,16 @@ export default function AnalyticsPage() {
   const [selectedDate, setSelectedDate] = useState(getSavedSelectedDate());
   const [forecastType, setForecastType] = useState<ForecastType>('simple');
 
+  const updateRange = (value: RangeKey) => {
+    setRange(value);
+    window.localStorage.setItem('moneypilot-range', value);
+  };
+
+  const updateSelectedDate = (value: string) => {
+    setSelectedDate(value);
+    window.localStorage.setItem('moneypilot-selectedDate', value);
+  };
+
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(true), 80);
     setPurchases(readPurchases());
@@ -540,8 +550,13 @@ export default function AnalyticsPage() {
         </article>
       </section>
 
-      <section className="period-summary">
-        <p>Период данных: <strong>{range === 'today' ? 'Сегодня' : range === 'week' ? 'Неделя' : 'Месяц'}</strong>, выбранная дата <strong>{selectedDate}</strong>.</p>
+      <section className="period-summary period-controls" aria-label="Период аналитики">
+        <div className="widget-tabs">
+          {([{ key: 'today', label: 'Сегодня' }, { key: 'week', label: 'Неделя' }, { key: 'month', label: 'Месяц' }] as const).map(item => (
+            <button key={item.key} className={`widget-tab ${range === item.key ? 'active' : ''}`} onClick={() => updateRange(item.key)}>{item.label}</button>
+          ))}
+        </div>
+        <label>Дата анализа <input type="date" value={selectedDate} onChange={event => updateSelectedDate(event.target.value)} /></label>
       </section>
 
       {analytics && (

@@ -43,7 +43,6 @@ function formatProjectedDate(remaining: number, contribution: number) {
   date.setMonth(date.getMonth() + Math.ceil(remaining / contribution));
   return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(date);
 }
-function priorityLabel(priority?: FamilyGoal['priority']) { return priority === 'high' ? 'Высокий приоритет' : priority === 'low' ? 'Низкий приоритет' : 'Средний приоритет'; }
 
 function getShares(goal: FamilyGoal, members: FamilyMember[], contribution: number) {
   const participants = (goal.memberIds ?? []).map(id => members.find(member => member.id === id)).filter(Boolean) as FamilyMember[];
@@ -114,30 +113,6 @@ export default function FamilyPage() {
     return { income, expenses, available: income - expenses, planned, actualThisMonth, fund, required, unallocated: income - expenses - planned, goalPlans };
   }, [members, familyExpenses, goals]);
 
-  const familyCashFlow = useMemo(() => {
-    const date = getToday();
-    const monthStart = `${date.slice(0, 7)}-01`;
-    const accounts = getAccounts().filter(account => account.spendable && account.scope === 'family');
-    const transactions = getTransactions().filter(transaction => transaction.status === 'completed' && transaction.date >= monthStart && transaction.date <= date);
-    const balances = accountBalances(getAccounts(), getTransactions(), date);
-    const rows = accounts.map(account => {
-      const income = transactions.filter(transaction => transaction.type === 'income' && transaction.accountId === account.id).reduce((sum, transaction) => sum + transaction.amount, 0);
-      const expenses = transactions.filter(transaction => transaction.type === 'expense' && transaction.accountId === account.id).reduce((sum, transaction) => sum + transaction.amount, 0);
-      const goalTransfers = transactions.filter(transaction => transaction.type === 'goal-contribution' && transaction.toAccountId && transaction.accountId === account.id).reduce((sum, transaction) => sum + transaction.amount, 0);
-      const member = members.find(item => item.id === account.memberId);
-      return { id: account.id, name: member?.name || account.name, income, expenses, goalTransfers, balance: balances[account.id] || 0 };
-    });
-    return {
-      rows,
-      income: rows.reduce((sum, row) => sum + row.income, 0),
-      expenses: rows.reduce((sum, row) => sum + row.expenses, 0),
-      goalTransfers: rows.reduce((sum, row) => sum + row.goalTransfers, 0),
-      balance: rows.reduce((sum, row) => sum + row.balance, 0),
-      monthStart,
-      date,
-    };
-  }, [members, goals]);
-
   const addContribution = (event: FormEvent, goal: FamilyGoal) => {
     event.preventDefault();
     const amount = Number(contributionAmount);
@@ -161,58 +136,38 @@ export default function FamilyPage() {
     setContributionGoalId(null);
   };
 
-  const togglePause = (id: string) => saveGoals(goals.map(goal => goal.id === id ? { ...goal, isPaused: !goal.isPaused } : goal));
   const activities = plan.goalPlans.flatMap(goal => (goal.activity ?? []).map(activity => ({ ...activity, goalTitle: goal.title, memberName: members.find(member => member.id === activity.memberId)?.name }))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
   const nextGoal = plan.goalPlans.find(goal => goal.planStatus === 'at-risk' || goal.planStatus === 'missing-date') ?? plan.goalPlans[0];
 
   return (
     <div className="page-grid">
       <section className="hero-panel compact family-hero">
-        <div><p className="eyebrow">Семейный режим</p><h2>{plan.unallocated < 0 ? 'План требует пересмотра' : 'Свободные деньги распределены'}</h2><p>{plan.unallocated < 0 ? `Для текущих планов не хватает ${formatCurrency(Math.abs(plan.unallocated))}/мес.` : `После всех плановых взносов остаётся ${formatCurrency(plan.unallocated)}/мес.`}</p></div>
-        <Link className="hero-action" to="/settings">Управлять планом</Link>
+        <div><p className="eyebrow">Семейный бюджет</p><h2>{plan.unallocated < 0 ? 'На цели не хватает денег' : 'Деньги на месяц распределены'}</h2><p>{plan.unallocated < 0 ? `Не хватает ${formatCurrency(Math.abs(plan.unallocated))}/мес.` : `На цели и свободные траты остаётся ${formatCurrency(plan.unallocated)}/мес.`}</p></div>
+        <Link className="hero-action" to="/settings">Добавить цель</Link>
       </section>
 
       <section className="family-summary" aria-label="Сводка семейного бюджета">
-        <article className="card total-card income"><span>Плановые доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Регулярные доходы, заданные в настройках.</p></article>
+        <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Регулярно в месяц.</p></article>
         <article className="card total-card expenses"><span>Обязательные расходы</span><strong>{formatCurrency(plan.expenses)}</strong><p>Вычитаются до распределения на цели.</p></article>
-        <article className="card total-card"><span>Свободно в месяц</span><strong>{formatCurrency(plan.available)}</strong><p>Доходы минус обязательные расходы.</p></article>
-        <article className="card total-card"><span>Нужно для дедлайнов</span><strong>{formatCurrency(plan.required)}</strong><p>Запланировано {formatCurrency(plan.planned)}/мес.</p></article>
-        <article className="card total-card"><span>Внесено в этом месяце</span><strong>{formatCurrency(plan.actualThisMonth)}</strong><p>Фактические пополнения фондов.</p></article>
+        <article className="card total-card"><span>Можно направить на цели</span><strong>{formatCurrency(plan.available)}</strong><p>После обязательных расходов.</p></article>
       </section>
 
-      <section className="card large">
-        <div className="card-head"><div><h2>Фактические денежные потоки семьи</h2><p className="settings-note">Завершённые операции семейных счетов с {familyCashFlow.monthStart} по {familyCashFlow.date}. Переводы в цели остаются вашими деньгами, но исключаются из доступных счетов.</p></div></div>
-        <div className="family-summary" aria-label="Фактические денежные потоки">
-          <article className="card total-card income"><span>Фактически поступило</span><strong>+{formatCurrency(familyCashFlow.income)}</strong></article>
-          <article className="card total-card expenses"><span>Фактические расходы</span><strong>−{formatCurrency(familyCashFlow.expenses)}</strong></article>
-          <article className="card total-card"><span>Переведено в фонды целей</span><strong>↔{formatCurrency(familyCashFlow.goalTransfers)}</strong></article>
-          <article className="card total-card"><span>Доступно на счетах семьи</span><strong>{formatCurrency(familyCashFlow.balance)}</strong></article>
-        </div>
-        <div className="settings-list">{familyCashFlow.rows.map(row => <div key={row.id} className="settings-row"><div><strong>{row.name}</strong><p>Поступило +{formatCurrency(row.income)} · расходы −{formatCurrency(row.expenses)} · в цели ↔{formatCurrency(row.goalTransfers)}</p></div><strong>На счёте {formatCurrency(row.balance)}</strong></div>)}</div>
-      </section>
-
-      {nextGoal && <section className={`family-alert ${nextGoal.planStatus}`}><strong>{nextGoal.title}</strong><span>{nextGoal.planStatus === 'at-risk' ? `Не хватает ${formatCurrency(Math.max(0, (nextGoal.requiredMonthly ?? 0) - nextGoal.plannedContribution))}/мес до дедлайна.` : nextGoal.planStatus === 'missing-date' ? 'Укажите дедлайн, чтобы проверить выполнимость.' : `Ближайшая цель: ${formatDeadline(nextGoal.targetDate)}.`}</span></section>}
+      {nextGoal && <section className={`family-alert ${nextGoal.planStatus}`}><div><strong>Что сделать сейчас: {nextGoal.title}</strong><span>{nextGoal.planStatus === 'at-risk' ? `Не хватает ${formatCurrency(Math.max(0, (nextGoal.requiredMonthly ?? 0) - nextGoal.plannedContribution))}/мес до срока.` : nextGoal.planStatus === 'missing-date' ? 'Укажите срок, чтобы проверить план.' : `Пополните на ${formatCurrency(Math.max(0, nextGoal.plannedContribution - nextGoal.actualThisMonth))} в этом месяце.`}</span></div><button type="button" className="text-link" onClick={() => { setContributionGoalId(nextGoal.id); setContributionMemberId(nextGoal.memberIds?.[0] ?? ''); }}>Пополнить</button></section>}
 
       <section className="card large">
         <div className="card-head"><div><h2>Семейные цели</h2><p className="settings-note">Сначала показаны цели с риском срыва срока.</p></div><Link className="text-link" to="/settings">Добавить цель</Link></div>
         {plan.goalPlans.length ? <div className="family-goal-grid">{plan.goalPlans.map(goal => (
           <article key={goal.id} className="family-goal-card">
-            <div className="goal-plan-head"><div><span className={`goal-priority ${goal.priority ?? 'medium'}`}>{priorityLabel(goal.priority)}</span><h3>{goal.title}</h3></div><span className="goal-type">{formatDeadline(goal.targetDate)}</span></div>
+            <div className="goal-plan-head"><div><h3>{goal.title}</h3><span className="settings-note">{formatDeadline(goal.targetDate)}</span></div><strong>{formatCurrency(goal.plannedContribution)}/мес</strong></div>
             <div className="goal-progress-label"><span>Накоплено</span><strong>{goal.progress}%</strong></div><div className="bar-track"><span style={{ width: `${goal.progress}%` }} /></div><div className="goal-progress-numbers"><span>{formatCurrency(goal.currentSavings)}</span><span>из {formatCurrency(goal.target)}</span></div>
-            <div className={`family-goal-status ${goal.planStatus}`}>{goal.planStatus === 'done' ? 'Цель достигнута' : goal.planStatus === 'paused' ? 'План на паузе' : goal.planStatus === 'missing-date' ? 'Добавьте дедлайн, чтобы проверить план' : goal.planStatus === 'on-track' ? `План ${formatCurrency(goal.plannedContribution)}/мес покрывает требуемые ${formatCurrency(goal.requiredMonthly ?? 0)}/мес` : `План ${formatCurrency(goal.plannedContribution)}/мес, требуется ${formatCurrency(goal.requiredMonthly ?? 0)}/мес: не хватает ${formatCurrency(goal.planGap)}/мес`}</div>
-            {goal.factStatus !== 'not-applicable' && <div className={`family-goal-fact ${goal.factStatus}`}>Факт за месяц: {formatCurrency(goal.actualThisMonth)} из плана {formatCurrency(goal.plannedContribution)}{goal.actualThisMonth >= (goal.requiredMonthly ?? Infinity) && goal.planStatus === 'at-risk' ? '. Факт месяца покрывает требуемый темп, но регулярный план пока ниже него.' : ''}</div>}
-            <p className="settings-note">Осталось {formatCurrency(goal.remaining)}{goal.requiredMonthly ? ` · для дедлайна нужно ${formatCurrency(goal.requiredMonthly)}/мес` : ''} · прогноз по плану: {goal.projectedDate}</p>
-            <p className="settings-note">Вклад: {goal.participantContributions.length ? goal.participantContributions.map(share => `${share.name}: план ${formatCurrency(share.amount)}, внесено ${formatCurrency(share.actual)}`).join(' · ') : 'участники не назначены'}</p>
-            <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(goal.memberIds?.[0] ?? ''); }}>Пополнить</button><button type="button" className="text-link" onClick={() => togglePause(goal.id)}>{goal.isPaused ? 'Возобновить' : 'Пауза'}</button><Link className="text-link" to="/settings">Изменить план</Link></div>
-            {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /><button type="submit">Сохранить</button></form>}
+            <div className={`family-goal-status ${goal.planStatus}`}>{goal.planStatus === 'done' ? 'Цель достигнута' : goal.planStatus === 'paused' ? 'План на паузе' : goal.planStatus === 'missing-date' ? 'Добавьте срок' : goal.actualThisMonth >= goal.plannedContribution ? 'Взнос за месяц выполнен' : `Осталось внести ${formatCurrency(goal.plannedContribution - goal.actualThisMonth)}`}</div>
+            <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(goal.memberIds?.[0] ?? ''); }}>Пополнить</button><Link className="text-link" to="/settings">Подробнее</Link></div>
+            {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><button type="submit">Сохранить</button><details className="goal-form-details"><summary>Кто и когда внёс</summary><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /></details></form>}
           </article>
         ))}</div> : <div className="empty-cell">Добавьте семейную цель с накопленной суммой и дедлайном в <Link to="/settings">Настройках</Link>.</div>}
       </section>
 
-      <section className="content-grid">
-        <div className="card large"><h2>Активность фондов</h2>{activities.length ? <ul className="family-activity">{activities.map(item => <li key={item.id}><span>{formatDate(item.date)} · {item.goalTitle}{item.memberName ? ` · ${item.memberName}` : ''}</span><strong>+{formatCurrency(item.amount)}</strong></li>)}</ul> : <div className="empty-cell">Пополнения целей появятся здесь.</div>}</div>
-        <div className="card large"><h2>Доходы семьи</h2><div className="settings-list">{members.filter(member => member.role !== 'Расход').length ? members.filter(member => member.role !== 'Расход').map(member => <div key={member.id} className="settings-row"><div><strong>{member.name}</strong><p>Регулярный доход</p></div><strong>+{formatCurrency(member.contribute)}/мес</strong></div>) : <div className="empty-cell">Добавьте источники дохода в <Link to="/settings">Настройках</Link>.</div>}</div></div>
-      </section>
+      <details className="card family-details"><summary>Последние пополнения и участники</summary><div className="content-grid"><div><h3>Последние пополнения</h3>{activities.length ? <ul className="family-activity">{activities.map(item => <li key={item.id}><span>{formatDate(item.date)} · {item.goalTitle}{item.memberName ? ` · ${item.memberName}` : ''}</span><strong>+{formatCurrency(item.amount)}</strong></li>)}</ul> : <p className="settings-note">Пополнений пока нет.</p>}</div><div><h3>Участники</h3><div className="settings-list">{members.length ? members.map(member => <div key={member.id} className="settings-row"><strong>{member.name}</strong><span>{formatCurrency(member.contribute)}/мес</span></div>) : <p className="settings-note">Добавьте участников в настройках.</p>}</div></div></div></details>
     </div>
   );
 }

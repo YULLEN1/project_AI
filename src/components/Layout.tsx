@@ -13,8 +13,8 @@ const navGroups = [
   {
     label: 'Планирование',
     items: [
-      { to: '/goals', label: 'Планы', icon: '◍' },
-      { to: '/retirement', label: 'Цели накоплений', icon: '◎' },
+      { to: '/goals', label: 'Сценарии', icon: '◍' },
+      { to: '/retirement', label: 'Мои цели', icon: '◎' },
       { to: '/family', label: 'Семья', icon: '⬢' },
     ],
   },
@@ -143,7 +143,6 @@ export default function Layout() {
             <h1>{currentPageLabel}</h1>
           </div>
           <div className="topbar-actions">
-            <div className="status-pill" aria-live="polite">{currentPageLabel}</div>
             <div className="user-block">
               <span>{user?.email}</span>
               <button className="ghost-button small" onClick={logout} aria-label="Выйти из аккаунта">Выйти</button>

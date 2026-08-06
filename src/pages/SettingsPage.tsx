@@ -230,6 +230,7 @@ export default function SettingsPage() {
   const [familyGoalMemberIds, setFamilyGoalMemberIds] = useState<string[]>([]);
   const [familyGoalDistribution, setFamilyGoalDistribution] = useState<NonNullable<FamilyGoal['distribution']>>('equal');
   const [familyGoalMemberContributions, setFamilyGoalMemberContributions] = useState<Record<string, string>>({});
+  const [showFamilyGoalDetails, setShowFamilyGoalDetails] = useState(false);
   const [familyGoalFundingId, setFamilyGoalFundingId] = useState<string | null>(null);
   const [familyGoalFundingAmount, setFamilyGoalFundingAmount] = useState('');
   const [familyGoalFundingMemberId, setFamilyGoalFundingMemberId] = useState('');
@@ -482,12 +483,20 @@ export default function SettingsPage() {
     const parsed = Number(familyGoalTarget);
     const parsedSavings = Number(familyGoalSavings);
     const parsedContribution = Number(familyGoalContribution);
-    const customContributionTotal = familyGoalMemberIds.reduce((sum, id) => sum + (Number(familyGoalMemberContributions[id]) || 0), 0);
-    if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0 || !familyGoalDate || !Number.isFinite(parsedSavings) || parsedSavings < 0 || !Number.isFinite(parsedContribution) || parsedContribution < 0) {
-      setMessage('Для семейной цели укажите название, сумму, накопления, срок и ежемесячный взнос.');
+    const savings = Number.isFinite(parsedSavings) && parsedSavings > 0 ? parsedSavings : 0;
+    const participants = familyGoalMemberIds.length ? familyGoalMemberIds : members.map(member => member.id);
+    const customContributionTotal = participants.reduce((sum, id) => sum + (Number(familyGoalMemberContributions[id]) || 0), 0);
+    if (!familyGoalTitle.trim() || !Number.isFinite(parsed) || parsed <= 0 || !familyGoalDate) {
+      setMessage('Для семейной цели укажите название, сумму и срок.');
       return;
     }
-    if (familyGoalDistribution === 'custom' && familyGoalMemberIds.length > 0 && customContributionTotal !== parsedContribution) {
+    const deadline = new Date(`${familyGoalDate}-01T00:00:00`);
+    const now = new Date();
+    const months = Math.max(1, (deadline.getFullYear() - now.getFullYear()) * 12 + deadline.getMonth() - now.getMonth() + 1);
+    const contribution = Number.isFinite(parsedContribution) && parsedContribution > 0
+      ? parsedContribution
+      : Math.ceil(Math.max(0, parsed - savings) / months);
+    if (familyGoalDistribution === 'custom' && participants.length > 0 && customContributionTotal !== contribution) {
       setMessage('Сумма индивидуальных взносов должна совпадать с общим взносом на цель.');
       return;
     }
@@ -495,14 +504,14 @@ export default function SettingsPage() {
       id: `${Date.now()}-${familyGoalTitle.trim()}`,
       title: familyGoalTitle.trim(),
       target: parsed,
-      currentSavings: parsedSavings,
+      currentSavings: savings,
       targetDate: familyGoalDate,
       priority: familyGoalPriority,
-      monthlyContribution: parsedContribution,
-      memberIds: familyGoalMemberIds,
+      monthlyContribution: contribution,
+      memberIds: participants,
       distribution: familyGoalDistribution,
       memberContributions: familyGoalDistribution === 'custom'
-        ? Object.fromEntries(familyGoalMemberIds.map(id => [id, Number(familyGoalMemberContributions[id]) || 0]))
+        ? Object.fromEntries(participants.map(id => [id, Number(familyGoalMemberContributions[id]) || 0]))
         : undefined,
       activity: [],
     };
@@ -520,6 +529,7 @@ export default function SettingsPage() {
     setFamilyGoalMemberIds([]);
     setFamilyGoalDistribution('equal');
     setFamilyGoalMemberContributions({});
+    setShowFamilyGoalDetails(false);
   };
 
   const toggleFamilyGoalMember = (id: string) => {
@@ -968,7 +978,7 @@ export default function SettingsPage() {
             <div className="settings-block-head">
               <div>
                 <h4>Семейные цели</h4>
-                <p>Укажите накопленное, дедлайн и ежемесячный взнос, чтобы видеть реальный план.</p>
+                <p>Укажите название, сумму и срок. Ежемесячный взнос рассчитаем автоматически.</p>
               </div>
               <span className="mini-pill">{familyGoalsList.length} целей</span>
             </div>
@@ -992,13 +1002,17 @@ export default function SettingsPage() {
             <form className="inline-form" onSubmit={handleAddFamilyGoal}>
               <label><span className="sr-only">Название семейной цели</span><input value={familyGoalTitle} onChange={e => setFamilyGoalTitle(e.target.value)} placeholder="Название цели" /></label>
               <label><span className="sr-only">Сумма семейной цели</span><input value={familyGoalTarget} onChange={e => setFamilyGoalTarget(e.target.value)} placeholder="Сумма цели, ₽" type="number" inputMode="decimal" /></label>
-              <label><span className="sr-only">Уже накоплено на семейную цель</span><input value={familyGoalSavings} onChange={e => setFamilyGoalSavings(e.target.value)} placeholder="Уже накоплено, ₽" type="number" inputMode="decimal" /></label>
               <label><span className="sr-only">Дедлайн семейной цели</span><input value={familyGoalDate} onChange={e => setFamilyGoalDate(e.target.value)} type="month" min={new Date().toISOString().slice(0, 7)} aria-label="Дедлайн семейной цели" /></label>
-              <label><span className="sr-only">Приоритет семейной цели</span><select value={familyGoalPriority} onChange={e => setFamilyGoalPriority(e.target.value as FamilyGoal['priority'])}><option value="high">Высокий приоритет</option><option value="medium">Средний приоритет</option><option value="low">Низкий приоритет</option></select></label>
-              <label><span className="sr-only">Ежемесячный взнос на семейную цель</span><input value={familyGoalContribution} onChange={e => setFamilyGoalContribution(e.target.value)} placeholder="Взнос в месяц, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить цель</button>
             </form>
-            {members.length > 0 && (
+            <button className="text-button" type="button" onClick={() => setShowFamilyGoalDetails(!showFamilyGoalDetails)} aria-expanded={showFamilyGoalDetails}>Дополнительные параметры</button>
+            {showFamilyGoalDetails && <div className="family-goal-settings">
+              <div className="input-grid">
+                <label>Уже накоплено<input value={familyGoalSavings} onChange={e => setFamilyGoalSavings(e.target.value)} placeholder="0 ₽" type="number" inputMode="decimal" /></label>
+                <label>Взнос в месяц<input value={familyGoalContribution} onChange={e => setFamilyGoalContribution(e.target.value)} placeholder="Рассчитать автоматически" type="number" inputMode="decimal" /></label>
+                <label>Приоритет<select value={familyGoalPriority} onChange={e => setFamilyGoalPriority(e.target.value as FamilyGoal['priority'])}><option value="high">Высокий</option><option value="medium">Средний</option><option value="low">Низкий</option></select></label>
+              </div>
+              {members.length > 0 && (
               <>
                 <fieldset className="goal-members">
                   <legend>Кто участвует в цели</legend>
@@ -1019,8 +1033,9 @@ export default function SettingsPage() {
                   </div>
                 )}
               </>
-            )}
-            <p className="settings-note">Пополнения фонда можно вносить у сохранённой цели. Для ручного распределения сумма взносов участников должна совпадать с общим ежемесячным взносом.</p>
+              )}
+            </div>}
+            <p className="settings-note">Все участники добавляются в цель автоматически. Пополнения можно вносить после сохранения цели.</p>
           </div>
         </section>
       )}

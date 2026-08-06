@@ -339,6 +339,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 14px;
   padding: 16px 0 4px;
 }
+.calculation-breakdown summary { cursor: pointer; font-weight: 700; }
+.calculation-breakdown[open] summary { margin-bottom: 12px; }
 .calendar-head {
   display: flex;
   justify-content: space-between;
@@ -797,11 +799,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .pension-goal-form button { width: 100%; }
 .purchase-form {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(120px, 1fr)) auto;
+  grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) auto auto;
   align-items: start;
 }
 .purchase-form label { min-width: 0; }
 .purchase-form label > input, .purchase-form label > select { width: 100%; min-width: 0; }
+.purchase-details { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.purchase-details label { display: grid; gap: 5px; font-size: var(--font-size-sm); color: #b8cfe8; }
+.purchase-details input, .purchase-details select { width: 100%; }
 .form-feedback { margin: 10px 0 0; font-size: var(--font-size-sm); }
 .form-feedback.error { color: #ff9fa6; }
 .form-feedback.success { color: #9af7d0; }
@@ -1055,6 +1060,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(255,255,255,0.04);
   color: #b8cfe8;
 }
+.period-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.period-controls .widget-tabs { margin: 0; }
+.period-controls label { display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); }
+.period-controls input { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: inherit; border-radius: var(--radius-sm); padding: 8px 10px; }
+.theme-light .period-controls input { background: #fff; border-color: rgba(32, 56, 88, 0.18); }
 .goal-list { list-style: none; padding: 0; margin: 0; }
 .goal-item {
   padding: 12px 0;
@@ -1098,6 +1108,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .goal-contribution-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 4px; }
 .goal-contribution-form input, .goal-contribution-form select { min-width: 0; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: inherit; padding: 9px 10px; border-radius: var(--radius-sm); }
 .goal-contribution-form button { grid-column: 1 / -1; padding: 9px 12px; }
+.goal-form-details { grid-column: 1 / -1; font-size: var(--font-size-sm); color: #b8cfe8; }
+.goal-form-details summary { cursor: pointer; margin: 4px 0 8px; }
+.goal-form-details select, .goal-form-details input { width: 100%; margin-top: 8px; }
+.family-details summary { cursor: pointer; font-weight: 700; }
+.family-details[open] summary { margin-bottom: 18px; }
+.family-goal-settings { margin-top: 14px; }
 .family-activity { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
 .family-activity li { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,0.07); font-size: var(--font-size-sm); }
 .family-activity li:last-child { border-bottom: 0; }
@@ -1151,6 +1167,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .expense-breakdown { grid-template-columns: 1fr; }
   .purchase-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .purchase-form button { grid-column: 1 / -1; }
+  .purchase-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .period-controls { align-items: flex-start; flex-direction: column; }
 }
 
 /* ── Responsive: ≤520px ── */
@@ -1159,6 +1177,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .inline-form { flex-direction: column; }
   .purchase-form { grid-template-columns: 1fr; }
   .purchase-form button { grid-column: auto; }
+  .purchase-details { grid-template-columns: 1fr; }
   .inline-form button { width: 100%; }
   .input-grid { flex-direction: column; }
   .calendar-day { min-width: 76px; flex: none; text-align: center; }
