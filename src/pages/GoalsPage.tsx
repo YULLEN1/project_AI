@@ -55,6 +55,14 @@ type ScenarioResult = {
   description: string;
 };
 
+type IncomeEvent = {
+  amount: number;
+  date: string;
+  status: 'expected' | 'received';
+  confidence: 'confirmed' | 'likely';
+  recurrence: 'once' | 'monthly';
+};
+
 export default function GoalsPage() {
   const [activeScenario, setActiveScenario] = useState(0);
   const [savingsRate, setSavingsRate] = useState(getSavedSavingsRate);
@@ -75,7 +83,7 @@ export default function GoalsPage() {
   }, [savingsRate]);
 
   const data = useMemo(() => {
-    const income = readNumber('moneypilot-income');
+    const configuredIncome = readNumber('moneypilot-income');
     const accounts = getAccounts();
     const transactions = getTransactions();
     const balances = accountBalances(accounts, transactions);
@@ -84,6 +92,7 @@ export default function GoalsPage() {
     const suggestedItem = readJson<{ name: string; price: number }>('moneypilot-suggestedItem', { name: '', price: 0 });
     const monthDates = getMonthDates();
     const today = getLocalToday();
+    const incomeEvents = readJson<IncomeEvent[]>('moneypilot-income-events', []);
 
     const daysPassed = monthDates.filter(d => d <= today).length || 1;
     const monthPurchases = purchases.filter(p => monthDates.includes(p.date) && p.date <= today);
@@ -91,6 +100,12 @@ export default function GoalsPage() {
     const goalContributions = goalContributionTotal(transactions, monthDates[0], today);
     const totalSpent = consumerExpenses + goalContributions;
     const actualIncome = transactions.filter(transaction => transaction.type === 'income' && transaction.status === 'completed' && transaction.date >= monthDates[0] && transaction.date <= today).reduce((sum, transaction) => sum + transaction.amount, 0);
+    const expectedIncome = incomeEvents.reduce((sum, event) => {
+      if (event.status !== 'expected' || event.confidence !== 'confirmed') return sum;
+      if (event.recurrence === 'monthly') return sum + event.amount;
+      return event.date.startsWith(today.slice(0, 7)) ? sum + event.amount : sum;
+    }, 0);
+    const income = configuredIncome ?? (expectedIncome || actualIncome || null);
     const avgDailySpend = daysPassed > 0 ? totalSpent / daysPassed : 0;
     const projectedMonthEnd = avgDailySpend * monthDates.length;
     const currentMonthlySavings = Math.max(0, actualIncome - projectedMonthEnd);
@@ -164,7 +179,8 @@ export default function GoalsPage() {
   const forecast = useMemo(() => {
     const monthlyIncome = data.income ?? data.actualIncome;
     const targetMonthly = Math.round(monthlyIncome * (savingsRate / 100));
-    const availableMonthly = Math.max(0, data.currentMonthlySavings + selected.monthlyDelta);
+    const expectedIncomeNotReceived = Math.max(0, monthlyIncome - data.actualIncome);
+    const availableMonthly = Math.max(0, data.currentMonthlySavings + expectedIncomeNotReceived + selected.monthlyDelta);
     const monthly = Math.min(targetMonthly, availableMonthly);
     const totalIn4Months = data.savings + monthly * 4;
     return {
