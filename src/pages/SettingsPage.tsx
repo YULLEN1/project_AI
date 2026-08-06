@@ -984,7 +984,7 @@ export default function SettingsPage() {
             </div>
             <div className="settings-list">
               {familyGoalsList.length ? familyGoalsList.map(goal => (
-                <div key={goal.id} className="settings-row">
+                <div key={goal.id} className={`settings-row ${familyGoalFundingId === goal.id ? 'with-funding-form' : ''}`}>
                   <div>
                     <strong>{goal.title} <span className={`goal-priority ${goal.priority ?? 'medium'}`}>{goal.priority === 'high' ? 'Высокий приоритет' : goal.priority === 'low' ? 'Низкий приоритет' : 'Средний приоритет'}</span></strong>
                     <p>{formatCurrency(goal.currentSavings ?? 0)} из {formatCurrency(goal.target)} · {goal.targetDate ? `к ${formatTargetDate(goal.targetDate)}` : 'срок не указан'} · {goal.isPaused ? 'план на паузе' : `${formatCurrency(goal.monthlyContribution ?? 0)}/мес`}</p>
@@ -993,7 +993,7 @@ export default function SettingsPage() {
                       <button type="button" className="text-link text-button" onClick={() => { setFamilyGoalFundingId(goal.id); setFamilyGoalFundingMemberId(goal.memberIds?.[0] ?? ''); }}>Пополнить</button>
                       <button type="button" className="text-button" onClick={() => handleRemoveFamilyGoal(goal.id)} aria-label={`Удалить ${goal.title}`}>Удалить</button>
                     </div>
-                    {familyGoalFundingId === goal.id && <form className="inline-form" onSubmit={event => handleAddFamilyGoalSavings(event, goal.id)}><label><span className="sr-only">Сумма пополнения</span><input autoFocus value={familyGoalFundingAmount} onChange={event => setFamilyGoalFundingAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" /></label><label><span className="sr-only">Участник</span><select value={familyGoalFundingMemberId} onChange={event => setFamilyGoalFundingMemberId(event.target.value)}><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label><label><span className="sr-only">Дата пополнения</span><input value={familyGoalFundingDate} onChange={event => setFamilyGoalFundingDate(event.target.value)} type="date" /></label><button type="submit">Сохранить</button></form>}
+                    {familyGoalFundingId === goal.id && <form className="family-goal-funding-form" onSubmit={event => handleAddFamilyGoalSavings(event, goal.id)}><label><span className="sr-only">Сумма пополнения</span><input autoFocus value={familyGoalFundingAmount} onChange={event => setFamilyGoalFundingAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" /></label><label>Кто пополнил<select value={familyGoalFundingMemberId} onChange={event => setFamilyGoalFundingMemberId(event.target.value)}><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label><label>Дата<input value={familyGoalFundingDate} onChange={event => setFamilyGoalFundingDate(event.target.value)} type="date" /></label><button type="submit">Сохранить</button></form>}
                 </div>
               )) : (
                 <div className="empty-cell">Пока нет целей. Создайте первую цель.</div>
