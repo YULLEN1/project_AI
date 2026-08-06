@@ -1101,6 +1101,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .family-goal-fact.funded { color: #9af7d0; background: rgba(92, 205, 102, 0.08); }
 .family-goal-fact.missing { color: #ffca7a; background: rgba(255, 202, 122, 0.08); }
 .family-alert { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border-radius: var(--radius-md); background: rgba(55, 199, 255, 0.1); color: #c9efff; }
+.family-alert > div { display: grid; gap: 4px; }
+.family-alert > div span { display: block; }
 .family-alert.at-risk { color: #ffdb9c; background: rgba(255, 202, 122, 0.12); }
 .family-alert.missing-date { color: #b8d5ff; }
 .goal-card-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
