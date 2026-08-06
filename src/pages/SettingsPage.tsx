@@ -533,8 +533,13 @@ export default function SettingsPage() {
   };
 
   const toggleFamilyGoalMember = (id: string) => {
-    setFamilyGoalMemberIds(current => current.includes(id) ? current.filter(memberId => memberId !== id) : [...current, id]);
+    setFamilyGoalMemberIds(current => {
+      const selected = current.length ? current : members.map(member => member.id);
+      return selected.includes(id) ? selected.filter(memberId => memberId !== id) : [...selected, id];
+    });
   };
+
+  const selectedFamilyGoalMembers = familyGoalMemberIds.length ? familyGoalMemberIds : members.map(member => member.id);
 
   const handleRemoveFamilyGoal = (id: string) => {
     if (!window.confirm('Удалить семейную цель и вернуть её деньги на основной счёт?')) return;
@@ -1021,17 +1026,17 @@ export default function SettingsPage() {
               <>
                 <fieldset className="goal-members">
                   <legend>Кто участвует в цели</legend>
-                  {members.map(member => <label key={member.id}><input type="checkbox" checked={familyGoalMemberIds.includes(member.id)} onChange={() => toggleFamilyGoalMember(member.id)} /> {member.name}</label>)}
+                  {members.map(member => <label key={member.id}><input type="checkbox" checked={selectedFamilyGoalMembers.includes(member.id)} onChange={() => toggleFamilyGoalMember(member.id)} /> {member.name}</label>)}
                 </fieldset>
                 <fieldset className="goal-members">
                   <legend>Как распределять ежемесячный взнос</legend>
                   <label><input type="radio" name="family-goal-distribution" checked={familyGoalDistribution === 'equal'} onChange={() => setFamilyGoalDistribution('equal')} /> Поровну</label>
                   <label><input type="radio" name="family-goal-distribution" checked={familyGoalDistribution === 'income'} onChange={() => setFamilyGoalDistribution('income')} /> Пропорционально доходу</label>
-                  <label><input type="radio" name="family-goal-distribution" checked={familyGoalDistribution === 'custom'} onChange={() => setFamilyGoalDistribution('custom')} /> Указать вручную</label>
+                  <label><input type="radio" name="family-goal-distribution" checked={familyGoalDistribution === 'custom'} onChange={() => { setFamilyGoalDistribution('custom'); setFamilyGoalMemberIds(selectedFamilyGoalMembers); }} /> Указать вручную</label>
                 </fieldset>
-                {familyGoalDistribution === 'custom' && familyGoalMemberIds.length > 0 && (
+                {familyGoalDistribution === 'custom' && selectedFamilyGoalMembers.length > 0 && (
                   <div className="input-grid goal-contribution-grid">
-                    {familyGoalMemberIds.map(id => {
+                    {selectedFamilyGoalMembers.map(id => {
                       const member = members.find(item => item.id === id);
                       return <label key={id}>{member?.name ?? 'Участник'}<input type="number" min="0" inputMode="decimal" value={familyGoalMemberContributions[id] ?? ''} onChange={e => setFamilyGoalMemberContributions(current => ({ ...current, [id]: e.target.value }))} placeholder="Взнос, ₽" /></label>;
                     })}
