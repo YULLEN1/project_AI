@@ -283,8 +283,8 @@ export default function DashboardPage() {
         </div>
         <Link className="hero-action" to="/settings">{nextIncome ? 'Изменить план' : 'Добавить поступление'}</Link>
       </section>
-      <details className="card calculation-breakdown">
-        <summary>Как рассчитан ориентир</summary>
+      <section className="card calculation-breakdown" aria-label="Как рассчитан ориентир">
+        <h2>Как рассчитан ориентир</h2>
         <p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p>
         <div className="settings-list">
           <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
@@ -292,7 +292,7 @@ export default function DashboardPage() {
           <div className="settings-row"><span>Резерв целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
           <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
         </div>
-      </details>
+      </section>
       {incomeEvents.some(event => event.status === 'expected' && event.confidence === 'likely') && <label className="income-confidence-toggle"><input type="checkbox" checked={includeLikelyIncome} onChange={e => setIncludeLikelyIncome(e.target.checked)} /> Учитывать вероятные поступления в ориентире</label>}
 
       <section className="widget-tabs" aria-label="Временные показатели">
