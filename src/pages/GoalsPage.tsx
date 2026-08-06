@@ -21,6 +21,12 @@ function readNumber(key: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function getSavedSavingsRate() {
+  if (typeof window === 'undefined') return 20;
+  const value = Number(window.localStorage.getItem('moneypilot-savings-rate'));
+  return Number.isFinite(value) && value >= 5 && value <= 40 ? value : 20;
+}
+
 function formatCurrency(value: number) {
   return `${value.toLocaleString('ru-RU')} ₽`;
 }
@@ -51,7 +57,7 @@ type ScenarioResult = {
 
 export default function GoalsPage() {
   const [activeScenario, setActiveScenario] = useState(0);
-  const [savingsRate, setSavingsRate] = useState(20);
+  const [savingsRate, setSavingsRate] = useState(getSavedSavingsRate);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -63,6 +69,10 @@ export default function GoalsPage() {
       window.removeEventListener('focus', refresh);
     };
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('moneypilot-savings-rate', String(savingsRate));
+  }, [savingsRate]);
 
   const data = useMemo(() => {
     const income = readNumber('moneypilot-income');
@@ -152,10 +162,18 @@ export default function GoalsPage() {
   const selected = scenarios[activeScenario];
 
   const forecast = useMemo(() => {
-    const baseMonthlySaving = data.currentMonthlySavings * (savingsRate / 100);
-    const adjustedMonthly = baseMonthlySaving + selected.monthlyDelta * (savingsRate / 100);
-    const totalIn4Months = data.savings + adjustedMonthly * 4;
-    return { monthly: Math.round(adjustedMonthly), total: Math.round(totalIn4Months) };
+    const monthlyIncome = data.income ?? data.actualIncome;
+    const targetMonthly = Math.round(monthlyIncome * (savingsRate / 100));
+    const availableMonthly = Math.max(0, data.currentMonthlySavings + selected.monthlyDelta);
+    const monthly = Math.min(targetMonthly, availableMonthly);
+    const totalIn4Months = data.savings + monthly * 4;
+    return {
+      monthly: Math.round(monthly),
+      total: Math.round(totalIn4Months),
+      targetMonthly,
+      availableMonthly: Math.round(availableMonthly),
+      shortfall: Math.max(0, Math.round(targetMonthly - availableMonthly)),
+    };
   }, [data, selected, savingsRate]);
 
   const canBuy = useMemo(() => {
@@ -198,6 +216,8 @@ export default function GoalsPage() {
           <p>{selected.label}</p>
           <strong>{formatCurrency(forecast.total)}</strong>
           <span>остаток через 4 месяца</span>
+          <p style={{ marginTop: 8, color: '#8fd4ff' }}>Цель: {formatCurrency(forecast.targetMonthly)}/мес ({savingsRate}% дохода). После сценария доступно: {formatCurrency(forecast.availableMonthly)}/мес.</p>
+          {forecast.shortfall > 0 && <p style={{ marginTop: 8, color: '#ffca7a' }}>До целевого взноса не хватает {formatCurrency(forecast.shortfall)}/мес.</p>}
           {selected.monthlyDelta > 0 && (
             <p style={{ marginTop: 8, color: '#84f4c0' }}>+{formatCurrency(selected.monthlyDelta)}/мес</p>
           )}
