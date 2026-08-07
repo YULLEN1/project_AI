@@ -1390,7 +1390,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .theme-light .goal-progress-numbers,
 .theme-light .goal-share-details p,
 .theme-light .chat-empty {
-  color: #18324f;
+  color: #0c2745;
 }
 .ai-consent input { margin-top: 3px; accent-color: var(--color-primary); }
 @media (max-width: 520px) {
