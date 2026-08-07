@@ -1367,6 +1367,31 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   font-size: var(--font-size-md);
 }
 .ai-consent { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: var(--radius-md); background: rgba(55, 199, 255, 0.08); font-size: var(--font-size-sm); }
+
+/* Keep supporting copy readable against every light-theme surface. */
+.theme-light .brand-subtitle,
+.theme-light .nav-group-label,
+.theme-light .sidebar-card span,
+.theme-light .calendar-day small,
+.theme-light .settings-note,
+.theme-light .hero-panel p,
+.theme-light .auth-brand p,
+.theme-light .auth-lead,
+.theme-light .auth-footer,
+.theme-light .assistant-intro,
+.theme-light .income-confidence-toggle,
+.theme-light .metric-card span,
+.theme-light .purchase-details label,
+.theme-light .total-card span,
+.theme-light .total-card p,
+.theme-light .expense-history th,
+.theme-light .forecast-chart-labels,
+.theme-light .goal-progress-label,
+.theme-light .goal-progress-numbers,
+.theme-light .goal-share-details p,
+.theme-light .chat-empty {
+  color: #18324f;
+}
 .ai-consent input { margin-top: 3px; accent-color: var(--color-primary); }
 @media (max-width: 520px) {
   .chat-msg { max-width: 90%; }
