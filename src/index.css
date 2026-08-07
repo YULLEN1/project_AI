@@ -38,8 +38,8 @@
 }
 
 .theme-light {
-  color: #0a1628;
-  background: #e8edf8;
+  color: #071426;
+  background: #d9e4f3;
 }
 
 * { box-sizing: border-box; }
@@ -94,7 +94,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .theme-light .app-shell {
-  background: radial-gradient(circle at 15% 20%, rgba(55, 199, 255, 0.14), transparent 28%), linear-gradient(135deg, #f5f8ff, #e6edf8);
+  background: radial-gradient(circle at 15% 20%, rgba(55, 199, 255, 0.18), transparent 28%), linear-gradient(135deg, #f8fbff, #cfdbed);
 }
 
 .app-shell::before {
@@ -160,7 +160,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .theme-light .sidebar {
-  background: linear-gradient(180deg, rgba(242, 246, 255, 0.97), rgba(232, 238, 250, 0.96));
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(220, 230, 245, 0.97));
+  border-right-color: rgba(25, 55, 96, 0.24);
 }
 
 .brand-block {
@@ -298,14 +299,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .theme-light .user-block { color: #14223b; background: rgba(255,255,255,0.85); }
 .theme-light .sidebar-card { color: #14223b; background: rgba(255,255,255,0.85); border-color: rgba(32, 56, 88, 0.12); }
 .theme-light .sidebar-card p { color: #1a4ec0; }
-.theme-light .sidebar-card span { color: #2a3d5e; }
-.theme-light .empty-cell { color: #3a4d6e; border-color: rgba(32, 56, 88, 0.12); }
-.theme-light .calendar-day { color: #1a2d4f; border-color: rgba(32, 56, 88, 0.12); background: rgba(255,255,255,0.85); }
-.theme-light .calendar-day small { color: #3a4d6e; }
+.theme-light .sidebar-card span { color: #1f3655; }
+.theme-light .empty-cell { color: #273f60; border-color: rgba(25, 55, 96, 0.24); }
+.theme-light .calendar-day { color: #102846; border-color: rgba(25, 55, 96, 0.24); background: #fff; }
+.theme-light .calendar-day small { color: #273f60; }
 .theme-light .eyebrow { color: #1a4ec0; }
-.theme-light .settings-note { color: #2a3d5e; }
-.theme-light .hero-panel p { color: #2a3d5e; }
-.theme-light .ghost-button { color: #0a1a30; background: rgba(255,255,255,0.92); border-color: rgba(32, 56, 88, 0.15); }
+.theme-light .settings-note { color: #1f3655; }
+.theme-light .hero-panel p { color: #1f3655; }
+.theme-light .ghost-button { color: #071a34; background: #fff; border-color: rgba(25, 55, 96, 0.3); }
 
 /* ── Page Content ── */
 .page-content { display: flex; flex-direction: column; gap: 20px; }
@@ -403,9 +404,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
 }
 .theme-light .hero-panel, .theme-light .card, .theme-light .metric-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(242, 246, 255, 0.97));
-  color: #0a1a30;
-  box-shadow: 0 20px 55px rgba(18, 35, 65, 0.12);
+  background: linear-gradient(135deg, #ffffff, #f2f6fc);
+  border-color: rgba(25, 55, 96, 0.28);
+  color: #071a34;
+  box-shadow: 0 16px 36px rgba(18, 35, 65, 0.16);
 }
 
 .card:active, .widget-tab:active, .ghost-button:active, .inline-form button:active, .chip:active {
@@ -573,9 +575,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .theme-light .settings-form input,
 .theme-light .settings-form select,
 .theme-light .assistant-form textarea {
-  border-color: rgba(46, 70, 104, 0.22);
-  background: rgba(255,255,255,0.98);
-  color: #0c1e38;
+  border-color: rgba(25, 55, 96, 0.38);
+  background: #fff;
+  color: #071a34;
 }
 .switch-label {
   display: flex;
@@ -817,9 +819,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .theme-light .inline-form input, .theme-light .inline-form select,
 .theme-light .input-grid input,
 .theme-light textarea {
-  border-color: rgba(46, 70, 104, 0.22);
-  background: rgba(255,255,255,0.98);
-  color: #0c1e38;
+  border-color: rgba(25, 55, 96, 0.38);
+  background: #fff;
+  color: #071a34;
 }
 .theme-light .inline-form select option {
   background: #fff;
