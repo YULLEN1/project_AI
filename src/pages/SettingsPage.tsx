@@ -398,7 +398,8 @@ export default function SettingsPage() {
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const date = getToday();
     const balanceAfterContribution = (accountBalances(accounts, transactions, date).main || 0) - amount;
-    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
+    const deficitWarning = `Пополнение цели приводит к дефициту: баланс основного счёта станет −${formatCurrency(Math.abs(balanceAfterContribution))}.`;
+    if (balanceAfterContribution < 0 && !window.confirm(`${deficitWarning} Сохранить операцию?`)) return;
     const transactionId = `goal-${id}-${Date.now()}`;
     handleSaveSavingsGoals(savingsGoals.map(goal => goal.id === id ? {
       ...goal,
@@ -412,7 +413,7 @@ export default function SettingsPage() {
     saveAccounts(nextAccounts);
     setTransactions(nextTransactions);
     saveTransactions(nextTransactions);
-    setMessage('Фактическое пополнение цели сохранено.');
+    setMessage(balanceAfterContribution < 0 ? deficitWarning : 'Фактическое пополнение цели сохранено.');
   };
 
   // Family handlers
@@ -581,6 +582,9 @@ export default function SettingsPage() {
     const goalId = `family-${id}`;
     const accountId = goalAccountId(goalId);
     const sourceAccountId = familyGoalFundingMemberId ? memberAccountId(familyGoalFundingMemberId) : 'main';
+    const sourceAccountName = accounts.find(account => account.id === sourceAccountId)?.name || 'выбранного счёта';
+    const balanceAfterContribution = (accountBalances(accounts, transactions, familyGoalFundingDate)[sourceAccountId] || 0) - amount;
+    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс ${sourceAccountName} станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
     const currentMonth = getToday().slice(0, 7);
     const monthlyIncome = members.reduce((sum, member) => sum + member.contribute, 0);
     const monthlyExpenses = familyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -928,7 +932,7 @@ export default function SettingsPage() {
               <label><span className="sr-only">Текущие накопления</span><input value={goalSavings} onChange={e => setGoalSavings(e.target.value)} placeholder="Уже есть, ₽" type="number" inputMode="decimal" /></label>
               <button type="submit">Добавить</button>
             </form>
-            {message && <div className={message.includes('добавлена') ? 'auth-success' : 'auth-error'} role="status">{message}</div>}
+            {message && <div className={message.includes('добавлена') ? 'auth-success' : 'auth-error'} role={message.includes('дефициту') ? 'alert' : 'status'}>{message}</div>}
             <p className="settings-note">Для пенсии капитал считается как ежемесячная выплата на весь срок после выхода на пенсию. Доходность и инфляция не учитываются.</p>
           </div>
         </section>

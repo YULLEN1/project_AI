@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getAccounts, getTransactions, goalAccountId, memberAccountId, saveAccounts, saveTransactions } from '../finance';
+import { accountBalances, getAccounts, getTransactions, goalAccountId, memberAccountId, saveAccounts, saveTransactions } from '../finance';
 
 type FamilyMember = { id: string; name: string; role: string; contribute: number; };
 type FamilyExpense = { id: string; name: string; amount: number; };
@@ -127,12 +127,15 @@ export default function FamilyPage() {
     const excess = (goal.currentSavings ?? 0) + amount - goal.target;
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const sourceAccountId = contributionMemberId ? memberAccountId(contributionMemberId) : 'main';
+    const accounts = getAccounts();
+    const sourceAccountName = accounts.find(account => account.id === sourceAccountId)?.name || 'выбранного счёта';
+    const balanceAfterContribution = (accountBalances(accounts, getTransactions(), contributionDate)[sourceAccountId] || 0) - amount;
+    if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс ${sourceAccountName} станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
     const remainingBudget = plan.available - plan.actualThisMonth;
     if (amount > remainingBudget && !window.confirm(`После пополнения на цели останется −${formatCurrency(Math.abs(remainingBudget - amount))} от семейного бюджета этого месяца. Сохранить операцию?`)) return;
     const id = `family-goal-${goal.id}-${Date.now()}`;
     const activity: GoalActivity = { id, amount, date: contributionDate, memberId: contributionMemberId || undefined };
     saveGoals(goals.map(item => item.id === goal.id ? { ...item, currentSavings: (item.currentSavings ?? 0) + amount, activity: [...(item.activity ?? []), activity] } : item));
-    const accounts = getAccounts();
     const goalId = `family-${goal.id}`;
     const accountId = goalAccountId(goalId);
     if (!accounts.some(account => account.id === accountId)) saveAccounts([...accounts, { id: accountId, name: `Семейная цель: ${goal.title}`, openingBalance: goal.currentSavings ?? 0, spendable: false, goalId }]);

@@ -174,6 +174,7 @@ export default function DashboardPage() {
   const [paymentId, setPaymentId] = useState('');
   const [showDetails, setShowDetails] = useState(false);
   const [formError, setFormError] = useState('');
+  const [formWarning, setFormWarning] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [range, setRange] = useState<RangeKey>(() => getSavedRange());
   const [selectedDate, setSelectedDate] = useState(() => getSavedSelectedDate());
@@ -234,6 +235,7 @@ export default function DashboardPage() {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     setFormError('');
+    setFormWarning('');
     setFormSuccess('');
     const parsedAmount = Number(amount);
     if (!title.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
@@ -243,7 +245,11 @@ export default function DashboardPage() {
     const transactionDate = normalizeDate(date);
     const balanceAfterExpense = (accountBalances(accounts, transactions, transactionDate)[accountId] || 0) - parsedAmount;
     const accountName = accounts.find(account => account.id === accountId)?.name || 'выбранного счёта';
-    if (balanceAfterExpense < 0 && !window.confirm(`После расхода баланс ${accountName} станет −${formatCurrency(Math.abs(balanceAfterExpense))}. Сохранить операцию?`)) return;
+    if (balanceAfterExpense < 0) {
+      const warning = `Расход приводит к дефициту: баланс ${accountName} станет −${formatCurrency(Math.abs(balanceAfterExpense))}.`;
+      if (!window.confirm(`${warning} Сохранить операцию?`)) return;
+      setFormWarning(warning);
+    }
 
     const next = [...transactions, {
       id: `${Date.now()}-${title.trim()}`,
@@ -397,6 +403,7 @@ export default function DashboardPage() {
             </div>}
           </form>
           {formError && <p className="form-feedback error" role="alert">{formError}</p>}
+          {formWarning && <p className="form-feedback error" role="alert">{formWarning}</p>}
           {formSuccess && <p className="form-feedback success" role="status">{formSuccess}</p>}
         </div>
 
