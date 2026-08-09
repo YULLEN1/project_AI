@@ -204,6 +204,13 @@ export default function DashboardPage() {
   const monthKey = selectedDate.slice(0, 7);
   const monthSpent = useMemo(() => calculateTotalSpent(transactions, `${monthKey}-01`, selectedDate), [transactions, monthKey, selectedDate]);
   const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate]);
+  const memberAccountIds = useMemo(() => new Set(accounts.filter(account => account.kind === 'member' && !account.archived).map(account => account.id)), [accounts]);
+  const familyMemberIncome = useMemo(() => transactions
+    .filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && memberAccountIds.has(item.accountId))
+    .reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, memberAccountIds]);
+  const familyMemberExpenses = useMemo(() => transactions
+    .filter(item => item.type === 'expense' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && memberAccountIds.has(item.accountId))
+    .reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, memberAccountIds]);
   const familyGoals = readJson<Array<{ target: number; currentSavings?: number; monthlyContribution?: number; isPaused?: boolean }>>('moneypilot-family-goals', []);
   const savingsGoals = readJson<Array<{ targetAmount: number; currentSavings: number; targetDate?: string; targetAge?: number; type?: string; name?: string; monthlyPension?: number; retirementAge?: number; lifeExpectancy?: number }>>('moneypilot-savings-goals', []);
   const userAge = (() => { const value = Number(window.localStorage.getItem('moneypilot-user-age')); return Number.isFinite(value) && value > 0 ? value : null; })();
@@ -215,7 +222,7 @@ export default function DashboardPage() {
   const goalsReserved = Math.max(0, plannedGoalsForMonth - goalContributionsToDate);
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
   const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
-  const availableCash = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
+  const availableCash = accounts.filter(account => account.spendable && account.kind !== 'member').reduce((sum, account) => sum + (balances[account.id] || 0), 0);
   const paymentsBeforeIncome = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
   const spendableBeforeIncome = availableCash - paymentsBeforeIncome - goalsReserved;
   const dailyBudget = daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
@@ -281,7 +288,7 @@ export default function DashboardPage() {
           {nextIncome ? (
             <>
               <strong className="decision-amount">{formatCurrency(Math.round(dailyBudget))}</strong>
-              <p>На доступных счетах: {formatCurrency(availableCash)}. Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · через {daysToIncome} дн.</p>
+              <p>На личных доступных счетах: {formatCurrency(availableCash)}. Следующее поступление: {nextIncome.source} · {formatCurrency(nextIncome.amount)} · через {daysToIncome} дн.</p>
             </>
           ) : (
             <p>Добавьте ожидаемую дату следующего поступления, чтобы распределить только уже полученные деньги по дням.</p>
@@ -293,7 +300,7 @@ export default function DashboardPage() {
         <h2>Как рассчитан ориентир</h2>
         <p className="settings-note">Факт на {selectedDate}; плановые платежи пока не списаны.</p>
         <div className="settings-list">
-          <div className="settings-row"><span>На доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
+          <div className="settings-row"><span>На личных доступных счетах</span><strong>{formatCurrency(availableCash)}</strong></div>
           <div className="settings-row"><span>Резерв обязательных платежей до дохода</span><strong>−{formatCurrency(paymentsBeforeIncome)}</strong></div>
           <div className="settings-row"><span>Резерв целей</span><strong>−{formatCurrency(goalsReserved)}</strong></div>
           <div className="settings-row"><strong>{spendableBeforeIncome < 0 ? 'Дефицит до дохода' : 'Можно потратить до дохода'}</strong><strong>{spendableBeforeIncome < 0 ? '−' : ''}{formatCurrency(spendableBeforeIncome)}</strong></div>
@@ -347,6 +354,16 @@ export default function DashboardPage() {
           <span>Накопления</span>
           <strong>{formatCurrency(savings)}</strong>
           <div className="mini-pill">{savings > 0 ? 'Ваш запас' : 'Добавьте сумму'}</div>
+        </article>
+        <article className="metric-card">
+          <span>Доходы членов семьи</span>
+          <strong>{formatCurrency(familyMemberIncome)}</strong>
+          <div className="mini-pill">На счета участников за месяц</div>
+        </article>
+        <article className="metric-card">
+          <span>Расходы членов семьи</span>
+          <strong>{formatCurrency(familyMemberExpenses)}</strong>
+          <div className="mini-pill">Со счетов участников за месяц</div>
         </article>
       </section>
 
