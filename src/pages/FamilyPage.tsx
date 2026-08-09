@@ -1,9 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getTransactions, goalAccountId, memberAccountId, saveAccounts, saveTransactions } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, saveAccounts, saveTransactions } from '../finance';
 
 type FamilyMember = { id: string; name: string; role: string; contribute: number; };
-type FamilyExpense = { id: string; name: string; amount: number; };
 type GoalActivity = { id: string; amount: number; date: string; memberId?: string; };
 type FamilyGoal = {
   id: string; title: string; target: number; currentSavings?: number; targetDate?: string;
@@ -63,16 +62,20 @@ function preferredContributorId(goal: { participantContributions: Array<{ id: st
 
 export default function FamilyPage() {
   const [members, setMembers] = useState<FamilyMember[]>(() => readJson('moneypilot-family-members', []));
-  const [familyExpenses, setFamilyExpenses] = useState<FamilyExpense[]>(() => readJson('moneypilot-family-expenses', []));
   const [goals, setGoals] = useState<FamilyGoal[]>(() => readJson('moneypilot-family-goals', []));
   const [contributionGoalId, setContributionGoalId] = useState<string | null>(null);
   const [contributionAmount, setContributionAmount] = useState('');
   const [contributionMemberId, setContributionMemberId] = useState('');
   const [contributionDate, setContributionDate] = useState(getToday());
   const [showFamilyDetails, setShowFamilyDetails] = useState(true);
+  const [financeVersion, setFinanceVersion] = useState(0);
 
   useEffect(() => {
-    const refresh = () => { setMembers(readJson('moneypilot-family-members', [])); setFamilyExpenses(readJson('moneypilot-family-expenses', [])); setGoals(readJson('moneypilot-family-goals', [])); };
+    const refresh = () => {
+      setMembers(readJson('moneypilot-family-members', []));
+      setGoals(readJson('moneypilot-family-goals', []));
+      setFinanceVersion(version => version + 1);
+    };
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, []);
@@ -84,10 +87,14 @@ export default function FamilyPage() {
 
   const plan = useMemo(() => {
     const incomeMembers = members.filter(member => member.role !== 'Расход');
-    const income = incomeMembers.reduce((sum, member) => sum + member.contribute, 0);
-    const legacyExpenses = members.filter(member => member.role === 'Расход').reduce((sum, member) => sum + member.contribute, 0);
-    const expenses = familyExpenses.reduce((sum, expense) => sum + expense.amount, legacyExpenses);
     const currentMonth = getToday().slice(0, 7);
+    const memberAccountIds = new Set(incomeMembers.map(member => memberAccountId(member.id)));
+    const income = getTransactions()
+      .filter(transaction => transaction.type === 'income' && transaction.status === 'completed' && transaction.date.startsWith(currentMonth) && memberAccountIds.has(transaction.accountId))
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const expenses = getPlannedPayments()
+      .filter(payment => payment.active)
+      .reduce((sum, payment) => sum + payment.amount, 0);
     const goalPlans = goals.map(goal => {
       const currentSavings = goal.currentSavings ?? 0;
       const remaining = Math.max(0, goal.target - currentSavings);
@@ -117,7 +124,7 @@ export default function FamilyPage() {
     const fund = goalPlans.reduce((sum, goal) => sum + goal.currentSavings, 0);
     const required = goalPlans.reduce((sum, goal) => sum + (goal.requiredMonthly ?? 0), 0);
     return { income, expenses, available: income - expenses, planned, actualThisMonth, fund, required, unallocated: income - expenses - planned, goalPlans };
-  }, [members, familyExpenses, goals]);
+  }, [members, goals, financeVersion]);
 
   const addContribution = (event: FormEvent, goal: FamilyGoal) => {
     event.preventDefault();
@@ -155,7 +162,7 @@ export default function FamilyPage() {
       </section>
 
       <section className="family-summary" aria-label="Сводка семейного бюджета">
-        <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Регулярно в месяц.</p></article>
+        <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Поступило на счета участников в этом месяце.</p></article>
         <article className="card total-card expenses"><span>Обязательные расходы</span><strong>{formatCurrency(plan.expenses)}</strong><p>Вычитаются до распределения на цели.</p></article>
         <article className="card total-card"><span>Можно направить на цели</span><strong>{formatCurrency(plan.available)}</strong><p>После обязательных расходов.</p></article>
       </section>
