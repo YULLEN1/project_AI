@@ -204,8 +204,23 @@ function migrateMemberAccounts() {
   if (additions.length) saveAccounts([...accounts, ...additions]);
 }
 
-export function getAccounts() { ensureFinanceData(); return normalizeAccounts(readJson<Account[]>(keys.accounts, [defaultAccount])); }
-export function getTransactions() { ensureFinanceData(); return readJson<Transaction[]>(keys.transactions, []); }
+function syncMemberMonthlyIncome() {
+  const month = today().slice(0, 7);
+  const members = readJson<Array<{ id?: string; name?: string; role?: string; contribute?: number }>>('moneypilot-family-members', []);
+  const accounts = readJson<Account[]>(keys.accounts, []);
+  const transactions = readJson<Transaction[]>(keys.transactions, []);
+  const additions = members.flatMap(member => {
+    const amount = asAmount(member.contribute);
+    const accountId = member.id ? memberAccountId(member.id) : '';
+    const id = `family-member-income-${member.id}-${month}`;
+    if (!member.id || member.role === 'Расход' || !amount || !accounts.some(account => account.id === accountId) || transactions.some(transaction => transaction.id === id)) return [];
+    return [{ id, type: 'income' as const, status: 'completed' as const, title: `Регулярный доход: ${member.name || 'участник'}`, amount, date: today(), accountId }];
+  });
+  if (additions.length) saveTransactions([...transactions, ...additions]);
+}
+
+export function getAccounts() { ensureFinanceData(); syncMemberMonthlyIncome(); return normalizeAccounts(readJson<Account[]>(keys.accounts, [defaultAccount])); }
+export function getTransactions() { ensureFinanceData(); syncMemberMonthlyIncome(); return readJson<Transaction[]>(keys.transactions, []); }
 export function getPlannedPayments() { ensureFinanceData(); return readJson<PlannedPayment[]>(keys.plannedPayments, []); }
 export function saveAccounts(accounts: Account[]) { window.localStorage.setItem(keys.accounts, JSON.stringify(normalizeAccounts(accounts))); }
 export function saveTransactions(transactions: Transaction[]) { window.localStorage.setItem(keys.transactions, JSON.stringify(transactions)); }

@@ -435,6 +435,7 @@ export default function SettingsPage() {
     const nextAccounts = [...accounts, { id: memberAccountId(next.id), name: `Счёт: ${next.name}`, openingBalance: 0, spendable: true, memberId: next.id }];
     setAccounts(nextAccounts);
     saveAccounts(nextAccounts);
+    setTransactions(getTransactions());
     setMemberName('');
     setMemberAmount('');
   };
