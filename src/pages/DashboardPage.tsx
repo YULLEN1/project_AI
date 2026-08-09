@@ -9,6 +9,7 @@ type Purchase = {
   amount: number;
   category: string;
   date: string;
+  accountId: string;
 };
 
 type IncomeEvent = {
@@ -189,9 +190,10 @@ export default function DashboardPage() {
 
   const accounts = getAccounts();
   const plannedPayments = getPlannedPayments();
+  const memberAccountIds = useMemo(() => new Set(accounts.filter(account => account.kind === 'member' && !account.archived).map(account => account.id)), [accounts]);
   const purchases = useMemo<Purchase[]>(() => transactions
     .filter(item => item.type === 'expense' && item.status === 'completed')
-    .map(item => ({ title: item.title, amount: item.amount, category: item.category || 'Разное', date: item.date })), [transactions]);
+    .map(item => ({ title: item.title, amount: item.amount, category: item.category || 'Разное', date: item.date, accountId: item.accountId })), [transactions]);
   const incomeEvents = readIncomeEvents();
   const nextIncome = useMemo(() => getNextIncome(incomeEvents, selectedDate, includeLikelyIncome), [incomeEvents, selectedDate, includeLikelyIncome]);
   const daysToIncome = nextIncome ? daysBetween(selectedDate, nextIncome.date) : null;
@@ -200,11 +202,11 @@ export default function DashboardPage() {
     () => purchases.filter(item => rangeDates.includes(item.date)),
     [purchases, rangeDates],
   );
+  const chartPurchases = useMemo(() => filteredPurchases.filter(item => !memberAccountIds.has(item.accountId)), [filteredPurchases, memberAccountIds]);
   const totalSpent = useMemo(() => filteredPurchases.reduce((sum, item) => sum + item.amount, 0), [filteredPurchases]);
   const monthKey = selectedDate.slice(0, 7);
   const monthSpent = useMemo(() => calculateTotalSpent(transactions, `${monthKey}-01`, selectedDate), [transactions, monthKey, selectedDate]);
   const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate]);
-  const memberAccountIds = useMemo(() => new Set(accounts.filter(account => account.kind === 'member' && !account.archived).map(account => account.id)), [accounts]);
   const familyMemberIncome = useMemo(() => transactions
     .filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && memberAccountIds.has(item.accountId))
     .reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, memberAccountIds]);
@@ -228,7 +230,7 @@ export default function DashboardPage() {
   const dailyBudget = daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
   const lastPurchase = purchases[purchases.length - 1];
   const averagePurchase = filteredPurchases.length ? Math.round(totalSpent / filteredPurchases.length) : 0;
-  const chartPoints = useMemo(() => buildChartPoints(rangeDates, purchases), [rangeDates, purchases]);
+  const chartPoints = useMemo(() => buildChartPoints(rangeDates, chartPurchases), [rangeDates, chartPurchases]);
   const chartPath = useMemo(() => {
     const values = chartPoints.map(point => point.total);
     const maxValue = Math.max(...values, 40);
@@ -370,11 +372,11 @@ export default function DashboardPage() {
       <section className="content-grid">
           <div className="card large chart-card">
             <div className="card-head">
-            <h2>Расходы по дням</h2>
+            <h2>Личные расходы по дням</h2>
             <span>{range === 'today' ? 'Сегодня' : range === 'week' ? 'Неделя' : 'Месяц'}</span>
           </div>
           <div className="chart-wrapper">
-            <svg viewBox="0 0 320 140" className="real-chart" role="img" aria-label="График расходов по дням">
+            <svg viewBox="0 0 320 140" className="real-chart" role="img" aria-label="График личных расходов по дням">
               <path d={chartPath} />
               {chartPoints.map((point, index) => {
                 const x = 10 + index * (300 / Math.max(chartPoints.length - 1, 1));
@@ -385,14 +387,14 @@ export default function DashboardPage() {
               })}
             </svg>
             <table className="sr-only">
-              <caption>Расходы по дням за выбранный период</caption>
+              <caption>Личные расходы по дням за выбранный период</caption>
               <tbody>{chartPoints.map(point => <tr key={point.date}><th scope="row">{formatDateLabel(point.date)}</th><td>{formatCurrency(point.total)}</td></tr>)}</tbody>
             </table>
             <div className="chart-tooltip">
               {nextIncome
-                ? (filteredPurchases.length
-                  ? `Итого ${formatCurrency(totalSpent)} за выбранный период`
-                  : 'Добавьте расходы в выбранный диапазон')
+                ? (chartPurchases.length
+                  ? `Итого ${formatCurrency(chartPurchases.reduce((sum, item) => sum + item.amount, 0))} за выбранный период`
+                  : 'Добавьте личные расходы в выбранный диапазон')
                 : 'Установите лимит и добавьте поступление в настройках'}
             </div>
           </div>
