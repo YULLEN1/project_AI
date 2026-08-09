@@ -205,16 +205,19 @@ function migrateMemberAccounts() {
 }
 
 function syncMemberMonthlyIncome() {
-  const month = today().slice(0, 7);
-  const members = readJson<Array<{ id?: string; name?: string; role?: string; contribute?: number }>>('moneypilot-family-members', []);
+  const currentDate = today();
+  const month = currentDate.slice(0, 7);
+  const members = readJson<Array<{ id?: string; name?: string; role?: string; contribute?: number; incomeDay?: number }>>('moneypilot-family-members', []);
   const accounts = readJson<Account[]>(keys.accounts, []);
   const transactions = readJson<Transaction[]>(keys.transactions, []);
   const additions = members.flatMap(member => {
     const amount = asAmount(member.contribute);
     const accountId = member.id ? memberAccountId(member.id) : '';
     const id = `family-member-income-${member.id}-${month}`;
-    if (!member.id || member.role === 'Расход' || !amount || !accounts.some(account => account.id === accountId) || transactions.some(transaction => transaction.id === id)) return [];
-    return [{ id, type: 'income' as const, status: 'completed' as const, title: `Регулярный доход: ${member.name || 'участник'}`, amount, date: today(), accountId }];
+    const dueDay = Math.min(Math.max(1, Math.floor(Number(member.incomeDay) || 1)), monthDates(currentDate).lastDay);
+    const dueDate = `${month}-${String(dueDay).padStart(2, '0')}`;
+    if (!member.id || member.role === 'Расход' || !amount || currentDate < dueDate || !accounts.some(account => account.id === accountId) || transactions.some(transaction => transaction.id === id)) return [];
+    return [{ id, type: 'income' as const, status: 'completed' as const, title: `Регулярный доход: ${member.name || 'участник'}`, amount, date: dueDate, accountId }];
   });
   if (additions.length) saveTransactions([...transactions, ...additions]);
 }

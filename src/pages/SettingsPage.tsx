@@ -21,6 +21,7 @@ type FamilyMember = {
   name: string;
   role: string;
   contribute: number;
+  incomeDay?: number;
   color: string;
 };
 
@@ -212,6 +213,7 @@ export default function SettingsPage() {
 
   const [memberName, setMemberName] = useState('');
   const [memberAmount, setMemberAmount] = useState('');
+  const [memberIncomeDay, setMemberIncomeDay] = useState(() => String(new Date().getDate()));
   const [expenseName, setExpenseName] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [incomeSource, setIncomeSource] = useState('');
@@ -420,8 +422,9 @@ export default function SettingsPage() {
   const handleAddMember = (e: FormEvent) => {
     e.preventDefault();
     const parsed = Number(memberAmount);
-    if (!memberName.trim() || !Number.isFinite(parsed) || parsed <= 0) {
-      setMessage('Для дохода укажите имя и сумму больше нуля.');
+    const incomeDay = Number(memberIncomeDay);
+    if (!memberName.trim() || !Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(incomeDay) || incomeDay < 1 || incomeDay > 31) {
+      setMessage('Для дохода укажите имя, сумму больше нуля и день месяца от 1 до 31.');
       return;
     }
     const next: FamilyMember = {
@@ -429,6 +432,7 @@ export default function SettingsPage() {
       name: memberName.trim(),
       role: 'Доход',
       contribute: parsed,
+      incomeDay,
       color: '#37c7ff',
     };
     handleSaveMembers([...members, next]);
@@ -438,6 +442,7 @@ export default function SettingsPage() {
     setTransactions(getTransactions());
     setMemberName('');
     setMemberAmount('');
+    setMemberIncomeDay(String(new Date().getDate()));
   };
 
   const handleRemoveMember = (id: string) => {
@@ -955,7 +960,7 @@ export default function SettingsPage() {
                 <div key={member.id} className="settings-row">
                   <div>
                     <strong>{member.name}</strong>
-                    <p>Регулярный доход</p>
+                    <p>Регулярный доход · {member.incomeDay ?? 1}-го числа</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>{member.contribute.toLocaleString('ru-RU')} ₽</span>
@@ -969,6 +974,7 @@ export default function SettingsPage() {
             <form className="inline-form" onSubmit={handleAddMember}>
               <label><span className="sr-only">Имя участника</span><input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" /></label>
               <label><span className="sr-only">Ежемесячный доход</span><input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Получает в месяц, ₽" type="number" inputMode="decimal" /></label>
+              <label><span className="sr-only">День начисления дохода</span><input value={memberIncomeDay} onChange={e => setMemberIncomeDay(e.target.value)} placeholder="День дохода" type="number" min="1" max="31" inputMode="numeric" /></label>
               <button type="submit">Добавить доход</button>
             </form>
           </div>
