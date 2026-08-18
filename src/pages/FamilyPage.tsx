@@ -100,9 +100,12 @@ export default function FamilyPage() {
     const mainExpenses = getTransactions()
       .filter(transaction => transaction.type === 'expense' && transaction.status === 'completed' && transaction.date.startsWith(currentMonth) && transaction.accountId === 'main')
       .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const memberExpenses = getTransactions()
+      .filter(transaction => transaction.type === 'expense' && transaction.status === 'completed' && transaction.date.startsWith(currentMonth) && memberAccountIds.has(transaction.accountId))
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
     const expenses = getPlannedPayments()
       .filter(payment => payment.active && plannedPaymentScope(payment) === 'family')
-      .reduce((sum, payment) => sum + payment.amount, mainExpenses);
+      .reduce((sum, payment) => sum + payment.amount, mainExpenses + memberExpenses);
     const goalPlans = goals.map(goal => {
       const currentSavings = goal.currentSavings ?? 0;
       const remaining = Math.max(0, goal.target - currentSavings);
@@ -176,7 +179,7 @@ export default function FamilyPage() {
 
       <section className="family-summary" aria-label="Сводка семейного бюджета">
         <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Поступило на счета участников и основной счёт в этом месяце.</p></article>
-        <article className="card total-card expenses"><span>Расходы семьи</span><strong>{formatCurrency(plan.expenses)}</strong><p>Обязательные платежи и расходы с основного счёта.</p></article>
+        <article className="card total-card expenses"><span>Расходы семьи</span><strong>{formatCurrency(plan.expenses)}</strong><p>Обязательные платежи и расходы с основного счёта и счетов участников.</p></article>
         <article className="card total-card"><span>Можно направить на цели</span><strong>{formatCurrency(plan.available)}</strong><p>После обязательных расходов.</p></article>
       </section>
 
