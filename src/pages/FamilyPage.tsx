@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, plannedPaymentScope, saveAccounts, saveTransactions } from '../finance';
 
 type FamilyMember = { id: string; name: string; role: string; contribute: number; isSelf?: boolean; };
+const SELF_MEMBER_ID = '__self__';
 type GoalActivity = { id: string; amount: number; date: string; memberId?: string; };
 type FamilyGoal = {
   id: string; title: string; target: number; currentSavings?: number; targetDate?: string;
@@ -153,7 +154,7 @@ export default function FamilyPage() {
     setContributionGoalId(null);
   };
 
-  const activities = plan.goalPlans.flatMap(goal => (goal.activity ?? []).map(activity => ({ ...activity, goalTitle: goal.title, memberName: members.find(member => member.id === activity.memberId)?.name }))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+  const activities = plan.goalPlans.flatMap(goal => (goal.activity ?? []).map(activity => ({ ...activity, goalTitle: goal.title, memberName: activity.memberId === SELF_MEMBER_ID ? 'Я' : members.find(member => member.id === activity.memberId)?.name }))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
   const nextGoal = plan.goalPlans.find(goal => goal.planStatus === 'at-risk' || goal.planStatus === 'missing-date') ?? plan.goalPlans[0];
 
   return (
@@ -180,7 +181,7 @@ export default function FamilyPage() {
             <div className={`family-goal-status ${goal.planStatus}`}>{goal.planStatus === 'done' ? 'Цель достигнута' : goal.planStatus === 'paused' ? 'План на паузе' : goal.planStatus === 'missing-date' ? 'Добавьте срок' : goal.actualThisMonth >= goal.plannedContribution ? 'Взнос за месяц выполнен' : `Осталось внести ${formatCurrency(goal.plannedContribution - goal.actualThisMonth)}`}</div>
             {goal.participantContributions.length > 0 && <div className="goal-share-details"><p>Взнос участников</p><div className="goal-share-list">{goal.participantContributions.map(share => <div key={share.id}><span>{share.name}</span><strong>{formatCurrency(Math.max(0, share.amount - share.actual))} из {formatCurrency(share.amount)}</strong></div>)}</div></div>}
             <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(preferredContributorId(goal)); }}>Пополнить</button><Link className="text-link" to="/settings">Подробнее</Link></div>
-            {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><button type="submit">Сохранить</button><div className="goal-form-details"><span>Кто и когда внёс</span><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход').map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /></div></form>}
+            {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><button type="submit">Сохранить</button><div className="goal-form-details"><span>Кто и когда внёс</span><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value={SELF_MEMBER_ID}>Я (личный счёт)</option><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход' && !isSelfMember(member)).map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /></div></form>}
           </article>
         ))}</div> : <div className="empty-cell">Добавьте семейную цель с накопленной суммой и дедлайном в <Link to="/settings">Настройках</Link>.</div>}
       </section>
