@@ -182,7 +182,7 @@ export default function GoalsPage() {
     const targetMonthly = Math.round(scenarioIncome * (savingsRate / 100));
     const expectedIncomeNotReceived = Math.max(0, monthlyIncome - data.actualIncome);
     const availableMonthly = Math.max(0, data.currentMonthlySavings + expectedIncomeNotReceived + selected.monthlyDelta);
-    const monthly = availableMonthly;
+    const monthly = Math.min(availableMonthly, targetMonthly);
     const totalIn4Months = data.savings + monthly * 4;
     return {
       monthly: Math.round(monthly),
