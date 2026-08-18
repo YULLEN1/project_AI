@@ -448,11 +448,8 @@ export default function SettingsPage() {
   const handleRemoveMember = (id: string) => {
     const accountId = memberAccountId(id);
     const balance = accountBalances(accounts, transactions)[accountId] || 0;
-    if (balance !== 0) {
-      setMessage(`Сначала переведите или сведите к нулю остаток счёта участника: ${formatCurrency(balance)}.`);
-      return;
-    }
-    if (window.confirm('Удалить участника семьи? Его счёт будет архивирован, а история сохранится.')) {
+    const balanceNote = balance ? ` Остаток ${formatCurrency(balance)} останется в архивном счёте.` : '';
+    if (window.confirm(`Удалить участника семьи? Его счёт будет архивирован, а история сохранится.${balanceNote}`)) {
       handleSaveMembers(members.filter(m => m.id !== id));
       const nextAccounts = accounts.map(account => account.id === accountId ? { ...account, spendable: false, archived: true } : account);
       setAccounts(nextAccounts);
