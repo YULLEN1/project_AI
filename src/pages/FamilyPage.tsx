@@ -94,9 +94,15 @@ export default function FamilyPage() {
     const income = getTransactions()
       .filter(transaction => transaction.type === 'income' && transaction.status === 'completed' && transaction.date.startsWith(currentMonth) && memberAccountIds.has(transaction.accountId))
       .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const mainIncome = getTransactions()
+      .filter(transaction => transaction.type === 'income' && transaction.status === 'completed' && transaction.date.startsWith(currentMonth) && transaction.accountId === 'main')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const mainExpenses = getTransactions()
+      .filter(transaction => transaction.type === 'expense' && transaction.status === 'completed' && transaction.date.startsWith(currentMonth) && transaction.accountId === 'main')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
     const expenses = getPlannedPayments()
       .filter(payment => payment.active && plannedPaymentScope(payment) === 'family')
-      .reduce((sum, payment) => sum + payment.amount, 0);
+      .reduce((sum, payment) => sum + payment.amount, mainExpenses);
     const goalPlans = goals.map(goal => {
       const currentSavings = goal.currentSavings ?? 0;
       const remaining = Math.max(0, goal.target - currentSavings);
@@ -125,7 +131,7 @@ export default function FamilyPage() {
     const actualThisMonth = goalPlans.reduce((sum, goal) => sum + goal.actualThisMonth, 0);
     const fund = goalPlans.reduce((sum, goal) => sum + goal.currentSavings, 0);
     const required = goalPlans.reduce((sum, goal) => sum + (goal.requiredMonthly ?? 0), 0);
-    return { income, expenses, available: income - expenses, planned, actualThisMonth, fund, required, unallocated: income - expenses - planned, goalPlans };
+    return { income: income + mainIncome, expenses, available: income + mainIncome - expenses, planned, actualThisMonth, fund, required, unallocated: income + mainIncome - expenses - planned, goalPlans };
   }, [members, goals, financeVersion]);
 
   const addContribution = (event: FormEvent, goal: FamilyGoal) => {
@@ -165,8 +171,8 @@ export default function FamilyPage() {
       </section>
 
       <section className="family-summary" aria-label="Сводка семейного бюджета">
-        <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Поступило на счета участников в этом месяце.</p></article>
-        <article className="card total-card expenses"><span>Обязательные расходы</span><strong>{formatCurrency(plan.expenses)}</strong><p>Вычитаются до распределения на цели.</p></article>
+        <article className="card total-card income"><span>Доходы семьи</span><strong>{formatCurrency(plan.income)}</strong><p>Поступило на счета участников и основной счёт в этом месяце.</p></article>
+        <article className="card total-card expenses"><span>Расходы семьи</span><strong>{formatCurrency(plan.expenses)}</strong><p>Обязательные платежи и расходы с основного счёта.</p></article>
         <article className="card total-card"><span>Можно направить на цели</span><strong>{formatCurrency(plan.available)}</strong><p>После обязательных расходов.</p></article>
       </section>
 

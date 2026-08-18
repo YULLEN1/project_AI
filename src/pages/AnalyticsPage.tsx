@@ -373,7 +373,7 @@ export default function AnalyticsPage() {
 
   const rangeDates = useMemo(() => getRangeDates(selectedDate, range), [selectedDate, range]);
   const accountScopeById = useMemo(() => new Map(accounts.map(account => [account.id, account.scope])), [accounts]);
-  const matchesBudgetScope = (accountId: string) => budgetScope === 'all' || accountScopeById.get(accountId) === budgetScope;
+  const matchesBudgetScope = (accountId: string) => budgetScope === 'all' || accountScopeById.get(accountId) === budgetScope || (budgetScope === 'family' && accountId === 'main');
   const filteredPurchases = useMemo(
     () => purchases.filter(item => rangeDates.includes(item.date) && item.date <= selectedDate && matchesBudgetScope(item.accountId)),
     [purchases, rangeDates, budgetScope, accountScopeById],
