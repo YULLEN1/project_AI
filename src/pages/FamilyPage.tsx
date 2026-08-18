@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, plannedPaymentScope, saveAccounts, saveTransactions } from '../finance';
 
-type FamilyMember = { id: string; name: string; role: string; contribute: number; };
+type FamilyMember = { id: string; name: string; role: string; contribute: number; isSelf?: boolean; };
 type GoalActivity = { id: string; amount: number; date: string; memberId?: string; };
 type FamilyGoal = {
   id: string; title: string; target: number; currentSavings?: number; targetDate?: string;
@@ -42,6 +42,7 @@ function formatProjectedDate(remaining: number, contribution: number) {
   date.setMonth(date.getMonth() + Math.ceil(remaining / contribution));
   return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(date);
 }
+function isSelfMember(member: Pick<FamilyMember, 'name' | 'isSelf'>) { return member.isSelf || member.name.trim().toLowerCase() === 'я'; }
 
 function getShares(goal: FamilyGoal, members: FamilyMember[], contribution: number) {
   const participants = (goal.memberIds ?? []).map(id => members.find(member => member.id === id)).filter(Boolean) as FamilyMember[];
@@ -133,7 +134,8 @@ export default function FamilyPage() {
     if (contributionDate > getToday()) return;
     const excess = (goal.currentSavings ?? 0) + amount - goal.target;
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
-    const sourceAccountId = contributionMemberId ? memberAccountId(contributionMemberId) : 'main';
+    const contributor = members.find(member => member.id === contributionMemberId);
+    const sourceAccountId = contributor && !isSelfMember(contributor) ? memberAccountId(contributor.id) : 'main';
     const accounts = getAccounts();
     const sourceAccountName = accounts.find(account => account.id === sourceAccountId)?.name || 'выбранного счёта';
     const balanceAfterContribution = (accountBalances(accounts, getTransactions(), contributionDate)[sourceAccountId] || 0) - amount;

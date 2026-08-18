@@ -378,7 +378,13 @@ export default function AnalyticsPage() {
     () => purchases.filter(item => rangeDates.includes(item.date) && item.date <= selectedDate && matchesBudgetScope(item.accountId)),
     [purchases, rangeDates, budgetScope, accountScopeById],
   );
-  const scopedTransactions = useMemo(() => transactions.filter(transaction => matchesBudgetScope(transaction.type === 'goal-contribution' && transaction.toAccountId ? transaction.toAccountId : transaction.accountId)), [transactions, budgetScope, accountScopeById]);
+  const scopedTransactions = useMemo(() => transactions.filter(transaction => {
+    if (budgetScope === 'all') return true;
+    if (transaction.type === 'goal-contribution' && transaction.toAccountId) {
+      return matchesBudgetScope(transaction.accountId) || matchesBudgetScope(transaction.toAccountId);
+    }
+    return matchesBudgetScope(transaction.accountId);
+  }), [transactions, budgetScope, accountScopeById]);
   const analytics = useMemo(() => {
     const categoryTotals = filteredPurchases.reduce<Record<string, number>>((acc, item) => {
       acc[item.category] = (acc[item.category] || 0) + item.amount;
@@ -403,7 +409,16 @@ export default function AnalyticsPage() {
     const income = readNumber('moneypilot-income');
     const fromDate = rangeDates[0];
     const throughDate = selectedDate;
-    const cashFlow = cashFlowSummary(scopedTransactions, fromDate, throughDate);
+    const cashFlowBase = cashFlowSummary(scopedTransactions, fromDate, throughDate);
+    const personalFamilyGoalContributions = budgetScope === 'family' ? 0 : scopedTransactions
+      .filter(transaction => transaction.type === 'goal-contribution' && transaction.toAccountId && accountScopeById.get(transaction.accountId) === 'personal' && accountScopeById.get(transaction.toAccountId) === 'family')
+      .filter(transaction => transaction.date >= fromDate && transaction.date <= throughDate)
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const cashFlow = {
+      ...cashFlowBase,
+      expenses: cashFlowBase.expenses + personalFamilyGoalContributions,
+      netCashFlow: cashFlowBase.netCashFlow - personalFamilyGoalContributions,
+    };
     const scopedAccounts = accounts.filter(account => matchesBudgetScope(account.id));
     const openingBalances = accountBalances(accounts, transactions, previousDate(fromDate));
     const closingBalances = accountBalances(accounts, transactions, throughDate);
@@ -582,7 +597,7 @@ export default function AnalyticsPage() {
             <div className="settings-list">
               <div className="settings-row"><span>Остаток на начало периода</span><strong>{formatCurrency(analytics.openingBalance)}</strong></div>
               <div className="settings-row"><span>Поступления</span><strong>+{formatCurrency(analytics.cashFlow.income)}</strong></div>
-              <div className="settings-row"><span>Потребительские расходы</span><strong>−{formatCurrency(analytics.cashFlow.expenses)}</strong></div>
+              <div className="settings-row"><span>Расходы бюджета</span><strong>−{formatCurrency(analytics.cashFlow.expenses)}</strong></div>
               <div className="settings-row"><span>Переводы в фонды целей</span><strong>↔{formatCurrency(analytics.cashFlow.goalContributions)}</strong></div>
               <div className="settings-row"><span>Переводы между счетами</span><strong>{formatCurrency(analytics.cashFlow.transfersIn)} ↔ {formatCurrency(analytics.cashFlow.transfersOut)}</strong></div>
               <div className="settings-row"><strong>Чистый поток</strong><strong>{analytics.cashFlow.netCashFlow >= 0 ? '+' : '−'}{formatCurrency(Math.abs(analytics.cashFlow.netCashFlow))}</strong></div>

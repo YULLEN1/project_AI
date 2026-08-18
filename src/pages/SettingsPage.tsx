@@ -23,6 +23,7 @@ type FamilyMember = {
   contribute: number;
   incomeDay?: number;
   color: string;
+  isSelf?: boolean;
 };
 
 type IncomeEvent = {
@@ -112,6 +113,10 @@ const GOAL_TYPES = ['Крупная покупка', 'Резерв', 'Путеш
 function formatTargetDate(value?: string) {
   if (!value) return 'срок не указан';
   return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`));
+}
+
+function isSelfMember(member: Pick<FamilyMember, 'name' | 'isSelf'>) {
+  return member.isSelf || member.name.trim().toLowerCase() === 'я';
 }
 
 function migrateLegacyFamilyExpenses() {
@@ -214,6 +219,7 @@ export default function SettingsPage() {
   const [memberName, setMemberName] = useState('');
   const [memberAmount, setMemberAmount] = useState('');
   const [memberIncomeDay, setMemberIncomeDay] = useState(() => String(new Date().getDate()));
+  const [memberIsSelf, setMemberIsSelf] = useState(false);
   const [expenseName, setExpenseName] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [incomeSource, setIncomeSource] = useState('');
@@ -434,6 +440,7 @@ export default function SettingsPage() {
       contribute: parsed,
       incomeDay,
       color: '#37c7ff',
+      isSelf: memberIsSelf,
     };
     handleSaveMembers([...members, next]);
     const nextAccounts = [...accounts, { id: memberAccountId(next.id), name: `Счёт: ${next.name}`, openingBalance: 0, spendable: true, memberId: next.id }];
@@ -443,6 +450,7 @@ export default function SettingsPage() {
     setMemberName('');
     setMemberAmount('');
     setMemberIncomeDay(String(new Date().getDate()));
+    setMemberIsSelf(false);
   };
 
   const handleRemoveMember = (id: string) => {
@@ -589,7 +597,8 @@ export default function SettingsPage() {
     if (excess > 0 && !window.confirm(`Пополнение превысит сумму цели на ${formatCurrency(excess)}. Сохранить операцию?`)) return;
     const goalId = `family-${id}`;
     const accountId = goalAccountId(goalId);
-    const sourceAccountId = familyGoalFundingMemberId ? memberAccountId(familyGoalFundingMemberId) : 'main';
+    const contributor = members.find(member => member.id === familyGoalFundingMemberId);
+    const sourceAccountId = contributor && !isSelfMember(contributor) ? memberAccountId(contributor.id) : 'main';
     const sourceAccountName = accounts.find(account => account.id === sourceAccountId)?.name || 'выбранного счёта';
     const balanceAfterContribution = (accountBalances(accounts, transactions, familyGoalFundingDate)[sourceAccountId] || 0) - amount;
     if (balanceAfterContribution < 0 && !window.confirm(`После пополнения цели баланс ${sourceAccountName} станет −${formatCurrency(Math.abs(balanceAfterContribution))}. Сохранить операцию?`)) return;
@@ -962,10 +971,11 @@ export default function SettingsPage() {
                 <div key={member.id} className="settings-row">
                   <div>
                     <strong>{member.name}</strong>
-                    <p>Регулярный доход · {member.incomeDay ?? 1}-го числа</p>
+                    <p>{isSelfMember(member) ? 'Это вы · ' : ''}Регулярный доход · {member.incomeDay ?? 1}-го числа</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>{member.contribute.toLocaleString('ru-RU')} ₽</span>
+                    {!isSelfMember(member) && <button type="button" className="text-button" onClick={() => handleSaveMembers(members.map(item => ({ ...item, isSelf: item.id === member.id })))}>Это я</button>}
                     <button type="button" className="text-button" onClick={() => handleRemoveMember(member.id)} aria-label={`Удалить ${member.name}`}>Удалить</button>
                   </div>
                 </div>
@@ -977,6 +987,7 @@ export default function SettingsPage() {
               <label><span className="sr-only">Имя участника</span><input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Имя" /></label>
               <label><span className="sr-only">Ежемесячный доход</span><input value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="Получает в месяц, ₽" type="number" inputMode="decimal" /></label>
               <label><span className="sr-only">День начисления дохода</span><input value={memberIncomeDay} onChange={e => setMemberIncomeDay(e.target.value)} placeholder="День дохода" type="number" min="1" max="31" inputMode="numeric" /></label>
+              <label className="switch-label"><span>Это я</span><input type="checkbox" checked={memberIsSelf} onChange={e => setMemberIsSelf(e.target.checked)} /></label>
               <button type="submit">Добавить доход</button>
             </form>
           </div>
