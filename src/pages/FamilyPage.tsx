@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, saveAccounts, saveTransactions } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalAccountId, memberAccountId, plannedPaymentScope, saveAccounts, saveTransactions } from '../finance';
 
 type FamilyMember = { id: string; name: string; role: string; contribute: number; };
 type GoalActivity = { id: string; amount: number; date: string; memberId?: string; };
@@ -93,7 +93,7 @@ export default function FamilyPage() {
       .filter(transaction => transaction.type === 'income' && transaction.status === 'completed' && transaction.date.startsWith(currentMonth) && memberAccountIds.has(transaction.accountId))
       .reduce((sum, transaction) => sum + transaction.amount, 0);
     const expenses = getPlannedPayments()
-      .filter(payment => payment.active)
+      .filter(payment => payment.active && plannedPaymentScope(payment) === 'family')
       .reduce((sum, payment) => sum + payment.amount, 0);
     const goalPlans = goals.map(goal => {
       const currentSavings = goal.currentSavings ?? 0;

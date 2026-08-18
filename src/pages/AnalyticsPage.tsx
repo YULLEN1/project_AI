@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, monthDates, plannedGoalReserve, plannedPaymentsReserved, type Transaction } from '../finance';
+import { accountBalances, cashFlowSummary, getAccounts, getPlannedPayments, getTransactions, monthDates, plannedGoalReserve, plannedPaymentScope, plannedPaymentsReserved, type Account, type AccountScope, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
+type BudgetScope = AccountScope | 'all';
 
 type Purchase = {
   title: string;
   amount: number;
   category: string;
   date: string;
+  accountId: string;
 };
 
 type FamilyGoal = {
@@ -77,7 +79,7 @@ function summarizeGoals(goals: GoalPlan[]) {
 const CATEGORY_COLORS = ['#37c7ff', '#8b6dff', '#84f4c0', '#ffca7a', '#ff7f8f', '#64a4ff'];
 
 function readPurchases() {
-  return getTransactions().filter(item => item.type === 'expense' && item.status === 'completed').map(item => ({ title: item.title, amount: item.amount, category: item.category || 'Разное', date: item.date }));
+  return getTransactions().filter(item => item.type === 'expense' && item.status === 'completed').map(item => ({ title: item.title, amount: item.amount, category: item.category || 'Разное', date: item.date, accountId: item.accountId }));
 }
 
 function getSavedRange() {
@@ -332,9 +334,11 @@ export default function AnalyticsPage() {
   const [visible, setVisible] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>(() => getAccounts());
   const [range, setRange] = useState<RangeKey>('week');
   const [selectedDate, setSelectedDate] = useState(getSavedSelectedDate());
   const [forecastType, setForecastType] = useState<ForecastType>('simple');
+  const [budgetScope, setBudgetScope] = useState<BudgetScope>('personal');
 
   const updateRange = (value: RangeKey) => {
     setRange(value);
@@ -350,13 +354,14 @@ export default function AnalyticsPage() {
     const timer = window.setTimeout(() => setVisible(true), 80);
     setPurchases(readPurchases());
     setTransactions(getTransactions());
+    setAccounts(getAccounts());
     setRange(getSavedRange());
     setSelectedDate(getSavedSelectedDate());
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === 'moneypilot-range') setRange(getSavedRange());
       if (event.key === 'moneypilot-selectedDate') setSelectedDate(getSavedSelectedDate());
-      if (event.key === 'moneypilot-purchases' || event.key === 'moneypilot-transactions') { setPurchases(readPurchases()); setTransactions(getTransactions()); }
+      if (event.key === 'moneypilot-purchases' || event.key === 'moneypilot-transactions' || event.key === 'moneypilot-accounts') { setPurchases(readPurchases()); setTransactions(getTransactions()); setAccounts(getAccounts()); }
     };
 
     window.addEventListener('storage', handleStorage);
@@ -367,10 +372,13 @@ export default function AnalyticsPage() {
   }, []);
 
   const rangeDates = useMemo(() => getRangeDates(selectedDate, range), [selectedDate, range]);
+  const accountScopeById = useMemo(() => new Map(accounts.map(account => [account.id, account.scope])), [accounts]);
+  const matchesBudgetScope = (accountId: string) => budgetScope === 'all' || accountScopeById.get(accountId) === budgetScope;
   const filteredPurchases = useMemo(
-    () => purchases.filter(item => rangeDates.includes(item.date) && item.date <= selectedDate),
-    [purchases, rangeDates],
+    () => purchases.filter(item => rangeDates.includes(item.date) && item.date <= selectedDate && matchesBudgetScope(item.accountId)),
+    [purchases, rangeDates, budgetScope, accountScopeById],
   );
+  const scopedTransactions = useMemo(() => transactions.filter(transaction => matchesBudgetScope(transaction.type === 'goal-contribution' && transaction.toAccountId ? transaction.toAccountId : transaction.accountId)), [transactions, budgetScope, accountScopeById]);
   const analytics = useMemo(() => {
     const categoryTotals = filteredPurchases.reduce<Record<string, number>>((acc, item) => {
       acc[item.category] = (acc[item.category] || 0) + item.amount;
@@ -383,7 +391,7 @@ export default function AnalyticsPage() {
     const total = filteredPurchases.reduce((sum, item) => sum + item.amount, 0);
     const dailyExpenses = rangeDates.map((date, index) => ({
       year: index + 1,
-      value: purchases.filter(item => item.date === date).reduce((sum, item) => sum + item.amount, 0),
+      value: filteredPurchases.filter(item => item.date === date).reduce((sum, item) => sum + item.amount, 0),
     }));
     const expenseChartPath = buildLinePath(dailyExpenses);
     const spendingDays = dailyExpenses.filter(point => point.value > 0);
@@ -395,18 +403,20 @@ export default function AnalyticsPage() {
     const income = readNumber('moneypilot-income');
     const fromDate = rangeDates[0];
     const throughDate = selectedDate;
-    const cashFlow = cashFlowSummary(transactions, fromDate, throughDate);
-    const accounts = getAccounts();
-    const openingBalance = Object.values(accountBalances(accounts, transactions, previousDate(fromDate))).reduce((sum, amount) => sum + amount, 0);
-    const closingBalance = Object.values(accountBalances(accounts, transactions, throughDate)).reduce((sum, amount) => sum + amount, 0);
+    const cashFlow = cashFlowSummary(scopedTransactions, fromDate, throughDate);
+    const scopedAccounts = accounts.filter(account => matchesBudgetScope(account.id));
+    const openingBalances = accountBalances(accounts, transactions, previousDate(fromDate));
+    const closingBalances = accountBalances(accounts, transactions, throughDate);
     const currentBalances = accountBalances(accounts, transactions, selectedDate);
-    const availableBalance = accounts.filter(account => account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
-    const reservedBalance = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
-    const periodTransactions = transactions.filter(transaction => transaction.status === 'completed' && rangeDates.includes(transaction.date) && transaction.date <= selectedDate).sort((a, b) => b.date.localeCompare(a.date));
-    const plannedPayments = plannedPaymentsReserved(getPlannedPayments(), transactions, selectedDate);
+    const openingBalance = scopedAccounts.reduce((sum, account) => sum + (openingBalances[account.id] || 0), 0);
+    const closingBalance = scopedAccounts.reduce((sum, account) => sum + (closingBalances[account.id] || 0), 0);
+    const availableBalance = scopedAccounts.filter(account => account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
+    const reservedBalance = scopedAccounts.filter(account => !account.spendable).reduce((sum, account) => sum + (currentBalances[account.id] || 0), 0);
+    const periodTransactions = scopedTransactions.filter(transaction => transaction.status === 'completed' && rangeDates.includes(transaction.date) && transaction.date <= selectedDate).sort((a, b) => b.date.localeCompare(a.date));
+    const plannedPayments = plannedPaymentsReserved(getPlannedPayments().filter(payment => budgetScope === 'all' || plannedPaymentScope(payment) === budgetScope), scopedTransactions, selectedDate);
     const { start: monthStart, end: monthEnd } = monthDates(selectedDate);
     const monthRangeDates = getRangeDates(selectedDate, 'month');
-    const plannedIncome = readJson<IncomeEvent[]>('moneypilot-income-events', []).reduce((sum, event) => {
+    const plannedIncome = budgetScope === 'family' ? 0 : readJson<IncomeEvent[]>('moneypilot-income-events', []).reduce((sum, event) => {
       if (event.status !== 'expected' || event.confidence === 'likely') return sum;
       if (event.recurrence === 'once') return event.date >= monthStart && event.date <= monthEnd ? sum + event.amount : sum;
       return sum + monthRangeDates.filter(date => Number(date.slice(8, 10)) === new Date(`${event.date}T00:00:00`).getDate()).length * event.amount;
@@ -415,10 +425,10 @@ export default function AnalyticsPage() {
     const userAge = readNumber('moneypilot-user-age');
     const savingsGoals = readJson<SavingsGoal[]>('moneypilot-savings-goals', []);
     const plannedGoals = plannedGoalReserve([
-      ...familyGoals.map(goal => ({ target: goal.target, currentSavings: goal.currentSavings ?? 0, monthlyContribution: goal.monthlyContribution, isPaused: goal.isPaused })),
-      ...savingsGoals.map(goal => ({ target: goal.targetAmount, currentSavings: goal.currentSavings, targetDate: goal.targetDate, targetAge: goal.targetAge, type: goal.type, name: goal.name, monthlyPension: goal.monthlyPension, retirementAge: goal.retirementAge, lifeExpectancy: goal.lifeExpectancy })),
+      ...(budgetScope !== 'personal' ? familyGoals.map(goal => ({ target: goal.target, currentSavings: goal.currentSavings ?? 0, monthlyContribution: goal.monthlyContribution, isPaused: goal.isPaused })) : []),
+      ...(budgetScope !== 'family' ? savingsGoals.map(goal => ({ target: goal.targetAmount, currentSavings: goal.currentSavings, targetDate: goal.targetDate, targetAge: goal.targetAge, type: goal.type, name: goal.name, monthlyPension: goal.monthlyPension, retirementAge: goal.retirementAge, lifeExpectancy: goal.lifeExpectancy })) : []),
     ], userAge);
-    const actualGoalContributionsThisMonth = goalContributionTotal(transactions, monthStart, selectedDate);
+    const actualGoalContributionsThisMonth = transactions.filter(transaction => transaction.type === 'goal-contribution' && transaction.status === 'completed' && transaction.toAccountId && matchesBudgetScope(transaction.toAccountId) && transaction.date >= monthStart && transaction.date <= selectedDate).reduce((sum, transaction) => sum + transaction.amount, 0);
     const goalsReserved = Math.max(0, plannedGoals - actualGoalContributionsThisMonth);
 
     const daysInPeriod = range === 'today' ? 1 : range === 'week' ? 7 : rangeDates.length;
@@ -499,7 +509,7 @@ export default function AnalyticsPage() {
        familyGoalSummary,
        personalGoalSummary,
     };
-  }, [filteredPurchases, purchases, range, rangeDates, selectedDate, transactions]);
+  }, [accounts, budgetScope, filteredPurchases, range, rangeDates, scopedTransactions, selectedDate, transactions]);
 
   return (
     <div className={`page-grid ${visible ? 'visible' : ''}`}>
@@ -509,6 +519,12 @@ export default function AnalyticsPage() {
           <h3>Реальный dashboard с живыми показателями</h3>
           <p>Вместо скучных диаграмм — динамические выводы и понятные тренды.</p>
         </div>
+      </section>
+
+      <section className="widget-tabs" aria-label="Область бюджета">
+        {([{ key: 'personal', label: 'Личный' }, { key: 'family', label: 'Семейный' }, { key: 'all', label: 'Все счета' }] as const).map(item => (
+          <button key={item.key} className={`widget-tab ${budgetScope === item.key ? 'active' : ''}`} onClick={() => { setBudgetScope(item.key); setForecastType('simple'); }}>{item.label}</button>
+        ))}
       </section>
 
       <section className="metrics-grid analytics-grid">
@@ -629,13 +645,13 @@ export default function AnalyticsPage() {
             >
               Расходы
             </button>
-            <button
+            {budgetScope !== 'personal' && <button
               className={`chip ${forecastType === 'family-goals' ? 'active' : ''}`}
               onClick={() => setForecastType('family-goals')}
             >
               Семейные цели
-            </button>
-            <button className={`chip ${forecastType === 'personal-goals' ? 'active' : ''}`} onClick={() => setForecastType('personal-goals')}>Личные цели</button>
+            </button>}
+            {budgetScope !== 'family' && <button className={`chip ${forecastType === 'personal-goals' ? 'active' : ''}`} onClick={() => setForecastType('personal-goals')}>Личные цели</button>}
           </div>
           {analytics ? (
             <>

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getPlannedPayments, getTransactions, goalContributionTotal, monthDates, plannedGoalReserve, plannedPaymentsReserved, saveTransactions, totalSpent as calculateTotalSpent, type Transaction } from '../finance';
+import { accountBalances, getAccounts, getPlannedPayments, getTransactions, monthDates, plannedGoalReserve, plannedPaymentScope, plannedPaymentsReserved, saveTransactions, type Transaction } from '../finance';
 
 type RangeKey = 'today' | 'week' | 'month';
 
@@ -190,6 +190,7 @@ export default function DashboardPage() {
 
   const accounts = getAccounts();
   const plannedPayments = getPlannedPayments();
+  const personalAccountIds = useMemo(() => new Set(accounts.filter(account => account.scope === 'personal').map(account => account.id)), [accounts]);
   const memberAccountIds = useMemo(() => new Set(accounts.filter(account => account.kind === 'member' && !account.archived).map(account => account.id)), [accounts]);
   const purchases = useMemo<Purchase[]>(() => transactions
     .filter(item => item.type === 'expense' && item.status === 'completed')
@@ -199,36 +200,35 @@ export default function DashboardPage() {
   const daysToIncome = nextIncome ? daysBetween(selectedDate, nextIncome.date) : null;
   const rangeDates = useMemo(() => getRangeDates(selectedDate, range), [selectedDate, range]);
   const filteredPurchases = useMemo(
-    () => purchases.filter(item => rangeDates.includes(item.date)),
-    [purchases, rangeDates],
+    () => purchases.filter(item => rangeDates.includes(item.date) && personalAccountIds.has(item.accountId)),
+    [purchases, rangeDates, personalAccountIds],
   );
-  const chartPurchases = useMemo(() => filteredPurchases.filter(item => !memberAccountIds.has(item.accountId)), [filteredPurchases, memberAccountIds]);
+  const chartPurchases = filteredPurchases;
   const totalSpent = useMemo(() => filteredPurchases.reduce((sum, item) => sum + item.amount, 0), [filteredPurchases]);
   const monthKey = selectedDate.slice(0, 7);
-  const monthSpent = useMemo(() => calculateTotalSpent(transactions, `${monthKey}-01`, selectedDate), [transactions, monthKey, selectedDate]);
-  const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate]);
+  const monthSpent = useMemo(() => transactions.filter(item => item.type === 'expense' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && personalAccountIds.has(item.accountId)).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, personalAccountIds]);
+  const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && personalAccountIds.has(item.accountId)).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, personalAccountIds]);
   const familyMemberIncome = useMemo(() => transactions
     .filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && memberAccountIds.has(item.accountId))
     .reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, memberAccountIds]);
   const familyMemberExpenses = useMemo(() => transactions
     .filter(item => item.type === 'expense' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && memberAccountIds.has(item.accountId))
     .reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, memberAccountIds]);
-  const familyGoals = readJson<Array<{ target: number; currentSavings?: number; monthlyContribution?: number; isPaused?: boolean }>>('moneypilot-family-goals', []);
   const savingsGoals = readJson<Array<{ targetAmount: number; currentSavings: number; targetDate?: string; targetAge?: number; type?: string; name?: string; monthlyPension?: number; retirementAge?: number; lifeExpectancy?: number }>>('moneypilot-savings-goals', []);
   const userAge = (() => { const value = Number(window.localStorage.getItem('moneypilot-user-age')); return Number.isFinite(value) && value > 0 ? value : null; })();
   const plannedGoalsForMonth = plannedGoalReserve([
-    ...familyGoals.map(goal => ({ target: goal.target, currentSavings: goal.currentSavings ?? 0, monthlyContribution: goal.monthlyContribution, isPaused: goal.isPaused })),
     ...savingsGoals.map(goal => ({ target: goal.targetAmount, currentSavings: goal.currentSavings, targetDate: goal.targetDate, targetAge: goal.targetAge, type: goal.type, name: goal.name, monthlyPension: goal.monthlyPension, retirementAge: goal.retirementAge, lifeExpectancy: goal.lifeExpectancy })),
   ], userAge);
-  const goalContributionsToDate = goalContributionTotal(transactions, `${monthKey}-01`, selectedDate);
+  const goalContributionsToDate = transactions.filter(item => item.type === 'goal-contribution' && item.status === 'completed' && item.toAccountId && personalAccountIds.has(item.toAccountId) && item.date >= `${monthKey}-01` && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0);
   const goalsReserved = Math.max(0, plannedGoalsForMonth - goalContributionsToDate);
   const balances = useMemo(() => accountBalances(accounts, transactions, selectedDate), [accounts, transactions, selectedDate]);
-  const savings = accounts.filter(account => !account.spendable).reduce((sum, account) => sum + (balances[account.id] || 0), 0);
-  const availableCash = accounts.filter(account => account.spendable && account.kind !== 'member').reduce((sum, account) => sum + (balances[account.id] || 0), 0);
-  const paymentsBeforeIncome = plannedPaymentsReserved(plannedPayments, transactions, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
+  const savings = accounts.filter(account => !account.spendable && account.scope === 'personal').reduce((sum, account) => sum + (balances[account.id] || 0), 0);
+  const availableCash = accounts.filter(account => account.spendable && account.scope === 'personal').reduce((sum, account) => sum + (balances[account.id] || 0), 0);
+  const personalPlannedPayments = plannedPayments.filter(payment => plannedPaymentScope(payment) === 'personal');
+  const paymentsBeforeIncome = plannedPaymentsReserved(personalPlannedPayments, transactions, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
   const spendableBeforeIncome = availableCash - paymentsBeforeIncome - goalsReserved;
   const dailyBudget = daysToIncome !== null ? spendableBeforeIncome / Math.max(1, daysToIncome) : 0;
-  const lastPurchase = purchases[purchases.length - 1];
+  const lastPurchase = filteredPurchases[filteredPurchases.length - 1];
   const averagePurchase = filteredPurchases.length ? Math.round(totalSpent / filteredPurchases.length) : 0;
   const chartPoints = useMemo(() => buildChartPoints(rangeDates, chartPurchases), [rangeDates, chartPurchases]);
   const chartPath = useMemo(() => {
@@ -270,8 +270,8 @@ export default function DashboardPage() {
       warnings.push(`Расход приводит к дефициту: баланс ${accountName} станет −${formatCurrency(Math.abs(balanceAfterExpense))}.`);
     }
     const nextBalances = accountBalances(accounts, next, selectedDate);
-    const nextAvailableCash = accounts.filter(account => account.spendable && account.kind !== 'member').reduce((sum, account) => sum + (nextBalances[account.id] || 0), 0);
-    const nextPaymentsBeforeIncome = plannedPaymentsReserved(plannedPayments, next, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
+    const nextAvailableCash = accounts.filter(account => account.spendable && account.scope === 'personal').reduce((sum, account) => sum + (nextBalances[account.id] || 0), 0);
+    const nextPaymentsBeforeIncome = plannedPaymentsReserved(personalPlannedPayments, next, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
     const nextSpendableBeforeIncome = nextAvailableCash - nextPaymentsBeforeIncome - goalsReserved;
     if (nextSpendableBeforeIncome < 0) {
       warnings.push(`До следующего дохода образуется дефицит ${formatCurrency(Math.abs(nextSpendableBeforeIncome))} с учётом обязательных платежей и целей.`);
@@ -426,8 +426,8 @@ export default function DashboardPage() {
               <label><span>Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select></label>
-              <label><span>Счёт</span><select value={accountId} onChange={e => setAccountId(e.target.value)}>{accounts.filter(account => account.spendable).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-              <label><span>Обязательный платёж</span><select value={paymentId} onChange={e => setPaymentId(e.target.value)}><option value="">Не выбран</option>{plannedPayments.filter(payment => payment.active).map(payment => <option key={payment.id} value={payment.id}>{payment.title}</option>)}</select></label>
+              <label><span>Счёт</span><select value={accountId} onChange={e => setAccountId(e.target.value)}>{accounts.filter(account => account.spendable && account.scope === 'personal').map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+              <label><span>Обязательный платёж</span><select value={paymentId} onChange={e => setPaymentId(e.target.value)}><option value="">Не выбран</option>{personalPlannedPayments.filter(payment => payment.active).map(payment => <option key={payment.id} value={payment.id}>{payment.title}</option>)}</select></label>
               <label><span>Дата</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
             </div>}
           </form>

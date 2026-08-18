@@ -65,6 +65,10 @@ export type PlannedPayment = {
   active: boolean;
 };
 
+export function plannedPaymentScope(payment: PlannedPayment): AccountScope {
+  return payment.id.startsWith('family-expense-') ? 'family' : 'personal';
+}
+
 const keys = {
   accounts: 'moneypilot-accounts',
   transactions: 'moneypilot-transactions',
