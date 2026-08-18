@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, getAccounts, getTransactions, goalContributionTotal } from '../finance';
+import { accountBalances, getAccounts, getTransactions } from '../finance';
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -96,9 +96,7 @@ export default function GoalsPage() {
 
     const daysPassed = monthDates.filter(d => d <= today).length || 1;
     const monthPurchases = purchases.filter(p => monthDates.includes(p.date) && p.date <= today);
-    const consumerExpenses = monthPurchases.reduce((sum, p) => sum + p.amount, 0);
-    const goalContributions = goalContributionTotal(transactions, monthDates[0], today);
-    const totalSpent = consumerExpenses + goalContributions;
+    const totalSpent = monthPurchases.reduce((sum, p) => sum + p.amount, 0);
     const actualIncome = transactions.filter(transaction => transaction.type === 'income' && transaction.status === 'completed' && transaction.date >= monthDates[0] && transaction.date <= today).reduce((sum, transaction) => sum + transaction.amount, 0);
     const expectedIncome = incomeEvents.reduce((sum, event) => {
       if (event.status !== 'expected' || event.confidence !== 'confirmed') return sum;
