@@ -207,14 +207,15 @@ export default function DashboardPage() {
   const totalSpent = useMemo(() => filteredPurchases.reduce((sum, item) => sum + item.amount, 0), [filteredPurchases]);
   const monthKey = selectedDate.slice(0, 7);
   const personalFamilyGoalContributions = useMemo(() => transactions.filter(item => item.type === 'goal-contribution' && item.status === 'completed' && item.toAccountId && personalAccountIds.has(item.accountId) && accounts.find(account => account.id === item.toAccountId)?.scope === 'family' && item.date.startsWith(monthKey) && item.date <= selectedDate).reduce((sum, item) => sum + item.amount, 0), [accounts, transactions, monthKey, selectedDate, personalAccountIds]);
-  const monthSpent = useMemo(() => transactions.filter(item => item.type === 'expense' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && personalAccountIds.has(item.accountId)).reduce((sum, item) => sum + item.amount, 0) + personalFamilyGoalContributions, [transactions, monthKey, selectedDate, personalAccountIds, personalFamilyGoalContributions]);
-  const actualIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && personalAccountIds.has(item.accountId)).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, personalAccountIds]);
   const familyMemberIncome = useMemo(() => transactions
     .filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && memberAccountIds.has(item.accountId))
     .reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, memberAccountIds]);
   const familyMemberExpenses = useMemo(() => transactions
     .filter(item => item.type === 'expense' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && memberAccountIds.has(item.accountId))
     .reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, memberAccountIds]);
+  const personalIncomeToDate = useMemo(() => transactions.filter(item => item.type === 'income' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && personalAccountIds.has(item.accountId)).reduce((sum, item) => sum + item.amount, 0), [transactions, monthKey, selectedDate, personalAccountIds]);
+  const actualIncomeToDate = personalIncomeToDate + familyMemberIncome;
+  const monthSpent = useMemo(() => transactions.filter(item => item.type === 'expense' && item.status === 'completed' && item.date.startsWith(monthKey) && item.date <= selectedDate && personalAccountIds.has(item.accountId)).reduce((sum, item) => sum + item.amount, 0) + familyMemberExpenses + personalFamilyGoalContributions, [transactions, monthKey, selectedDate, personalAccountIds, familyMemberExpenses, personalFamilyGoalContributions]);
   const savingsGoals = readJson<Array<{ targetAmount: number; currentSavings: number; targetDate?: string; targetAge?: number; type?: string; name?: string; monthlyPension?: number; retirementAge?: number; lifeExpectancy?: number }>>('moneypilot-savings-goals', []);
   const userAge = (() => { const value = Number(window.localStorage.getItem('moneypilot-user-age')); return Number.isFinite(value) && value > 0 ? value : null; })();
   const plannedGoalsForMonth = plannedGoalReserve([
