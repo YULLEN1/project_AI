@@ -338,7 +338,7 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState<RangeKey>('week');
   const [selectedDate, setSelectedDate] = useState(getSavedSelectedDate());
   const [forecastType, setForecastType] = useState<ForecastType>('simple');
-  const [budgetScope, setBudgetScope] = useState<BudgetScope>('personal');
+  const [budgetScope, setBudgetScope] = useState<BudgetScope>('all');
 
   const updateRange = (value: RangeKey) => {
     setRange(value);
