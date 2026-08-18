@@ -254,12 +254,6 @@ export default function DashboardPage() {
     const transactionDate = normalizeDate(date);
     const balanceAfterExpense = (accountBalances(accounts, transactions, transactionDate)[accountId] || 0) - parsedAmount;
     const accountName = accounts.find(account => account.id === accountId)?.name || 'выбранного счёта';
-    if (balanceAfterExpense < 0) {
-      const warning = `Расход приводит к дефициту: баланс ${accountName} станет −${formatCurrency(Math.abs(balanceAfterExpense))}.`;
-      if (!window.confirm(`${warning} Сохранить операцию?`)) return;
-      setFormWarning(warning);
-    }
-
     const next = [...transactions, {
       id: `${Date.now()}-${title.trim()}`,
       type: 'expense' as const,
@@ -271,6 +265,22 @@ export default function DashboardPage() {
       accountId,
       paymentId: paymentId || undefined,
     }];
+    const warnings: string[] = [];
+    if (balanceAfterExpense < 0) {
+      warnings.push(`Расход приводит к дефициту: баланс ${accountName} станет −${formatCurrency(Math.abs(balanceAfterExpense))}.`);
+    }
+    const nextBalances = accountBalances(accounts, next, selectedDate);
+    const nextAvailableCash = accounts.filter(account => account.spendable && account.kind !== 'member').reduce((sum, account) => sum + (nextBalances[account.id] || 0), 0);
+    const nextPaymentsBeforeIncome = plannedPaymentsReserved(plannedPayments, next, selectedDate, nextIncome?.date ?? monthDates(selectedDate).end);
+    const nextSpendableBeforeIncome = nextAvailableCash - nextPaymentsBeforeIncome - goalsReserved;
+    if (nextSpendableBeforeIncome < 0) {
+      warnings.push(`До следующего дохода образуется дефицит ${formatCurrency(Math.abs(nextSpendableBeforeIncome))} с учётом обязательных платежей и целей.`);
+    }
+    if (warnings.length) {
+      const warning = warnings.join(' ');
+      if (!window.confirm(`${warning} Сохранить операцию?`)) return;
+      setFormWarning(warning);
+    }
     setTransactions(next);
     saveTransactions(next);
     setTitle('');

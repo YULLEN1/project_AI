@@ -514,6 +514,11 @@ export default function SettingsPage() {
       setMessage('Сумма индивидуальных взносов должна совпадать с общим взносом на цель.');
       return;
     }
+    const monthlyIncome = members.reduce((sum, member) => sum + member.contribute, 0);
+    const monthlyExpenses = familyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const plannedContributions = familyGoalsList.reduce((sum, goal) => sum + (goal.isPaused ? 0 : goal.monthlyContribution ?? 0), 0) + contribution;
+    const deficit = plannedContributions - (monthlyIncome - monthlyExpenses);
+    if (deficit > 0 && !window.confirm(`С учётом обязательных расходов и всех целей ежемесячный план превышает доход семьи на ${formatCurrency(deficit)}. Добавить цель?`)) return;
     const next: FamilyGoal = {
       id: `${Date.now()}-${familyGoalTitle.trim()}`,
       title: familyGoalTitle.trim(),
