@@ -113,10 +113,14 @@ export default function FamilyPage() {
       const monthActivities = (goal.activity ?? []).filter(item => item.date.startsWith(currentMonth) && item.date <= getToday());
       const actualThisMonth = monthActivities.reduce((sum, item) => sum + item.amount, 0);
       const shares = getShares(goal, incomeMembers, plannedContribution);
-      const participantContributions = shares.map(share => ({
-        ...share,
-        actual: monthActivities.filter(item => item.memberId === share.id).reduce((sum, item) => sum + item.amount, 0),
-      }));
+      const selfMemberIds = new Set(incomeMembers.filter(isSelfMember).map(member => member.id));
+      const participantContributions = shares.map(share => {
+        const isSelf = isSelfMember(incomeMembers.find(member => member.id === share.id) ?? { name: '', isSelf: false });
+        const id = isSelf ? SELF_MEMBER_ID : share.id;
+        return { ...share, id, name: isSelf ? 'Я' : share.name, actual: monthActivities.filter(item => item.memberId === id || (isSelf && item.memberId !== undefined && selfMemberIds.has(item.memberId))).reduce((sum, item) => sum + item.amount, 0) };
+      });
+      const selfActual = monthActivities.filter(item => item.memberId === SELF_MEMBER_ID || (item.memberId !== undefined && selfMemberIds.has(item.memberId))).reduce((sum, item) => sum + item.amount, 0);
+      if (selfActual > 0 && !participantContributions.some(item => item.id === SELF_MEMBER_ID)) participantContributions.push({ id: SELF_MEMBER_ID, name: 'Я', amount: 0, actual: selfActual });
       const planGap = Math.max(0, (requiredMonthly ?? 0) - plannedContribution);
       const planStatus = remaining === 0 ? 'done' : goal.isPaused ? 'paused' : requiredMonthly === null ? 'missing-date' : plannedContribution >= requiredMonthly ? 'on-track' : 'at-risk';
       const factStatus = goal.isPaused || remaining === 0 || (plannedContribution === 0 && actualThisMonth === 0) ? 'not-applicable' : actualThisMonth >= plannedContribution ? 'funded' : 'missing';
@@ -185,7 +189,7 @@ export default function FamilyPage() {
             <div className="goal-plan-head"><div><h3>{goal.title}</h3><span className="settings-note">{formatDeadline(goal.targetDate)}</span></div><strong>{formatCurrency(goal.plannedContribution)}/мес</strong></div>
             <div className="goal-progress-label"><span>Накоплено</span><strong>{goal.progress}%</strong></div><div className="bar-track"><span style={{ width: `${goal.progress}%` }} /></div><div className="goal-progress-numbers"><span>{formatCurrency(goal.currentSavings)}</span><span>из {formatCurrency(goal.target)}</span></div>
             <div className={`family-goal-status ${goal.planStatus}`}>{goal.planStatus === 'done' ? 'Цель достигнута' : goal.planStatus === 'paused' ? 'План на паузе' : goal.planStatus === 'missing-date' ? 'Добавьте срок' : goal.actualThisMonth >= goal.plannedContribution ? 'Взнос за месяц выполнен' : `Осталось внести ${formatCurrency(goal.plannedContribution - goal.actualThisMonth)}`}</div>
-            {goal.participantContributions.length > 0 && <div className="goal-share-details"><p>Взнос участников</p><div className="goal-share-list">{goal.participantContributions.map(share => <div key={share.id}><span>{share.name}</span><strong>{formatCurrency(Math.max(0, share.amount - share.actual))} из {formatCurrency(share.amount)}</strong></div>)}</div></div>}
+            {goal.participantContributions.length > 0 && <div className="goal-share-details"><p>Взнос участников</p><div className="goal-share-list">{goal.participantContributions.map(share => <div key={share.id}><span>{share.name}</span><strong>{share.id === SELF_MEMBER_ID && share.amount === 0 ? `Внесено ${formatCurrency(share.actual)}` : `${formatCurrency(Math.max(0, share.amount - share.actual))} из ${formatCurrency(share.amount)}`}</strong></div>)}</div></div>}
             <div className="goal-card-actions"><button type="button" className="text-link" onClick={() => { setContributionGoalId(goal.id); setContributionMemberId(preferredContributorId(goal)); }}>Пополнить</button><Link className="text-link" to="/settings">Подробнее</Link></div>
             {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={event => addContribution(event, goal)}><input autoFocus value={contributionAmount} onChange={event => setContributionAmount(event.target.value)} type="number" min="1" inputMode="decimal" placeholder="Сумма, ₽" aria-label="Сумма пополнения" /><button type="submit">Сохранить</button><div className="goal-form-details"><span>Кто и когда внёс</span><select value={contributionMemberId} onChange={event => setContributionMemberId(event.target.value)} aria-label="Кто пополнил"><option value={SELF_MEMBER_ID}>Я (личный счёт)</option><option value="">Без участника</option>{members.filter(member => member.role !== 'Расход' && !isSelfMember(member)).map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><input value={contributionDate} onChange={event => setContributionDate(event.target.value)} type="date" aria-label="Дата пополнения" /></div></form>}
           </article>
