@@ -264,15 +264,15 @@ export default function GoalsPage() {
         </div>
         <div className="card reveal-card">
           <p className="eyebrow">Рекомендация</p>
-          {data.projectedMonthEnd > data.actualIncome ? (
+          {forecast.shortfall > 0 ? (
             <>
-              <h4>Расходы выше фактических поступлений</h4>
-              <p>Текущий темп ({formatCurrency(Math.round(data.projectedMonthEnd))}/мес) выше фактически полученных поступлений ({formatCurrency(data.actualIncome)}). Сократите траты или дождитесь поступления.</p>
+              <h4>Нужно скорректировать план</h4>
+              <p>В выбранном сценарии через 4 месяца будет {formatCurrency(forecast.total)}, но до целевого взноса не хватает {formatCurrency(forecast.shortfall)}/мес.</p>
             </>
           ) : (
             <>
               <h4>Всё под контролем</h4>
-              <p>При текущем темпе из фактически полученных денег останется {formatCurrency(Math.round(data.actualIncome - data.projectedMonthEnd))}. Вы в хорошей форме.</p>
+              <p>В выбранном сценарии через 4 месяца будет {formatCurrency(forecast.total)}. В накопления направляется {formatCurrency(forecast.monthly)}/мес.</p>
             </>
           )}
         </div>
