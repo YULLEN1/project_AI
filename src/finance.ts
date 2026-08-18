@@ -235,7 +235,8 @@ export function accountBalances(accounts: Account[], transactions: Transaction[]
   const effectiveThroughDate = [dateOnly(throughDate), today()].sort()[0];
   transactions.filter(item => item.status === 'completed' && dateOnly(item.date) <= effectiveThroughDate).forEach(item => {
     if (item.type === 'income') balances[item.accountId] = (balances[item.accountId] || 0) + item.amount;
-    if (item.type === 'expense' || item.type === 'goal-contribution') balances[item.accountId] = (balances[item.accountId] || 0) - item.amount;
+    // Goal entries without a destination are legacy opening balances, not transfers from this account.
+    if (item.type === 'expense' || (item.type === 'goal-contribution' && item.toAccountId)) balances[item.accountId] = (balances[item.accountId] || 0) - item.amount;
     if (item.type === 'goal-contribution' && item.toAccountId) balances[item.toAccountId] = (balances[item.toAccountId] || 0) + item.amount;
     if (item.type === 'transfer') {
       balances[item.accountId] = (balances[item.accountId] || 0) - item.amount;
@@ -380,22 +381,19 @@ export function cashFlowSummary(transactions: Transaction[], from: string, throu
     .reduce((result, item) => {
       if (item.type === 'income') result.income += item.amount;
       if (item.type === 'expense') result.expenses += item.amount;
-      if (item.type === 'goal-contribution') result.goalContributions += item.amount;
+      if (item.type === 'goal-contribution' && item.toAccountId) result.goalContributions += item.amount;
       if (item.type === 'transfer') {
         result.transfersOut += item.amount;
         result.transfersIn += item.amount;
       }
       return result;
     }, { income: 0, expenses: 0, goalContributions: 0, transfersIn: 0, transfersOut: 0 });
-  const externalGoalContributions = periodTransactions
-    .filter(item => item.type === 'goal-contribution' && !item.toAccountId)
-    .reduce((sum, item) => sum + item.amount, 0);
-  return { ...summary, netCashFlow: summary.income - summary.expenses - externalGoalContributions };
+  return { ...summary, netCashFlow: summary.income - summary.expenses };
 }
 
 export function goalContributionTotal(transactions: Transaction[], from: string, through: string) {
   return transactions
-    .filter(item => item.goalId && item.status === 'completed' && isDateOnlyInRange(item.date, from, [dateOnly(through), today()].sort()[0]))
+    .filter(item => item.type === 'goal-contribution' && item.goalId && item.toAccountId && item.status === 'completed' && isDateOnlyInRange(item.date, from, [dateOnly(through), today()].sort()[0]))
     .reduce((sum, item) => sum + item.amount, 0);
 }
 
