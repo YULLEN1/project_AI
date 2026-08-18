@@ -40,6 +40,7 @@
 .theme-light {
   color: #071426;
   background: #d9e4f3;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
