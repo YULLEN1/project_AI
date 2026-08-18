@@ -428,7 +428,7 @@ export default function DashboardPage() {
               <label><span>Категория</span><select value={category} onChange={e => setCategory(e.target.value as CategoryKey)}>
                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select></label>
-              <label><span>Счёт</span><select value={accountId} onChange={e => setAccountId(e.target.value)}>{accounts.filter(account => account.spendable && account.scope === 'personal').map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+              <label><span>Счёт</span><select value={accountId} onChange={e => setAccountId(e.target.value)}>{accounts.filter(account => account.spendable && !account.archived).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
               <label><span>Обязательный платёж</span><select value={paymentId} onChange={e => setPaymentId(e.target.value)}><option value="">Не выбран</option>{personalPlannedPayments.filter(payment => payment.active).map(payment => <option key={payment.id} value={payment.id}>{payment.title}</option>)}</select></label>
               <label><span>Дата</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
             </div>}
